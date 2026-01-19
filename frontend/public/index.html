@@ -6,168 +6,214 @@
     <title>GenLayer Consensus Challenge</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f1a; }
-        .gradient-text { background: linear-gradient(90deg, #a78bfa, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #0f0f1a 100%); }
+        .gradient-text { background: linear-gradient(90deg, #ff6b35, #f7931e, #ffcc02); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .page { display: none; }
         .page.active { display: block; }
-        .glow-purple { box-shadow: 0 0 60px rgba(139, 92, 246, 0.15); }
+        .card { background: linear-gradient(145deg, #1a1a2e 0%, #16162a 100%); border: 1px solid rgba(255, 107, 53, 0.2); }
+        .btn-primary { background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); }
+        .btn-primary:hover { background: linear-gradient(135deg, #ff8555 0%, #ffaa3e 100%); }
+        .glow { box-shadow: 0 0 30px rgba(255, 107, 53, 0.2); }
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body class="min-h-screen text-gray-100">
     <div class="fixed inset-0 pointer-events-none overflow-hidden">
-        <div class="absolute -top-40 -right-40 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl"></div>
-        <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl"></div>
+        <div class="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/5 rounded-full blur-3xl"></div>
+        <div class="absolute bottom-0 right-1/4 w-96 h-96 bg-yellow-500/5 rounded-full blur-3xl"></div>
     </div>
 
-    <header class="sticky top-0 z-50 bg-[#0f0f1a]/95 backdrop-blur-sm border-b border-violet-500/10">
-        <div class="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-sm">G</div>
-                <span class="font-semibold gradient-text">GenLayer</span>
-                <button onclick="showHelp()" class="w-6 h-6 rounded-full bg-[#1e1e2f] border border-[#2a2a3e] hover:border-violet-500 text-gray-400 hover:text-violet-400 text-xs flex items-center justify-center" title="How to play">?</button>
+    <header class="sticky top-0 z-50 backdrop-blur-md border-b border-white/5">
+        <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="text-2xl">🎮</div>
+                <div>
+                    <span class="font-bold text-lg gradient-text">Consensus</span>
+                    <span class="text-xs text-gray-500 block -mt-1">GenLayer Game</span>
+                </div>
+                <button onclick="showHelp()" class="ml-2 px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-xs">How to play?</button>
             </div>
-            <nav class="flex gap-1">
-                <button onclick="switchPage('game')" id="tabGame" class="px-3 py-1.5 text-sm rounded-lg bg-violet-600/20 text-violet-400">🎮 Game</button>
-                <button onclick="switchPage('leaderboard')" id="tabLeaderboard" class="px-3 py-1.5 text-sm rounded-lg text-gray-400 hover:text-white">🏆 Ranks</button>
-                <button onclick="switchPage('history')" id="tabHistory" class="px-3 py-1.5 text-sm rounded-lg text-gray-400 hover:text-white">📜 History</button>
+            <nav class="hidden sm:flex gap-1 bg-white/5 rounded-lg p-1">
+                <button onclick="switchPage('game')" id="tabGame" class="px-4 py-2 text-sm rounded-md bg-orange-500/20 text-orange-400 font-medium">Play</button>
+                <button onclick="switchPage('leaderboard')" id="tabLeaderboard" class="px-4 py-2 text-sm rounded-md text-gray-400 hover:text-white">Ranks</button>
+                <button onclick="switchPage('history')" id="tabHistory" class="px-4 py-2 text-sm rounded-md text-gray-400 hover:text-white">History</button>
             </nav>
-            <div class="flex items-center gap-2">
-                <div class="hidden sm:flex items-center gap-2 px-2 py-1 rounded-lg bg-[#1e1e2f] border border-[#2a2a3e]">
-                    <div id="statusDot" class="w-2 h-2 rounded-full bg-red-500"></div>
+            <div class="flex items-center gap-3">
+                <div id="headerXP" class="hidden items-center gap-1 px-3 py-1.5 rounded-full bg-yellow-500/20">
+                    <span class="text-yellow-400 text-xs font-bold">⭐</span>
+                    <span id="headerXPValue" class="text-yellow-400 text-xs font-bold">0 XP</span>
+                </div>
+                <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5">
+                    <div id="statusDot" class="w-2 h-2 rounded-full bg-red-500 pulse-dot"></div>
                     <span id="networkName" class="text-xs text-gray-400">Offline</span>
                 </div>
-                <button onclick="handleWalletClick()" id="walletBtn" class="px-3 py-1.5 text-sm rounded-lg border border-[#2a2a3e] bg-[#1e1e2f] hover:border-violet-500">
-                    Connect Wallet
+                <button onclick="handleWalletClick()" id="walletBtn" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium shadow-lg shadow-orange-500/20">
+                    Connect
                 </button>
             </div>
         </div>
     </header>
 
     <!-- Help Modal -->
-    <div id="helpModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div class="bg-[#161622] border border-violet-500/20 rounded-xl p-6 max-w-md mx-4 relative">
-            <button onclick="hideHelp()" class="absolute top-3 right-3 text-gray-500 hover:text-white text-lg">×</button>
-            <h3 class="text-lg font-semibold text-white mb-4">How to Play</h3>
-            <div class="space-y-3 text-sm text-gray-300">
-                <div class="flex gap-3">
-                    <span class="text-violet-400">1.</span>
-                    <span>Connect your wallet</span>
+    <div id="helpModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div class="card rounded-2xl p-6 max-w-md mx-4 relative glow">
+            <button onclick="hideHelp()" class="absolute top-4 right-4 text-gray-400 hover:text-white">✕</button>
+            <h3 class="text-xl font-bold gradient-text mb-4">🎯 How to Play</h3>
+            <div class="space-y-4 text-sm text-gray-300">
+                <div class="flex gap-3 items-start p-3 rounded-lg bg-white/5">
+                    <span class="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">1</span>
+                    <span>Connect wallet and join a room</span>
                 </div>
-                <div class="flex gap-3">
-                    <span class="text-violet-400">2.</span>
-                    <span>Enter a blockchain keyword</span>
+                <div class="flex gap-3 items-start p-3 rounded-lg bg-white/5">
+                    <span class="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">2</span>
+                    <span>Submit a keyword related to the <strong class="text-orange-400">weekly theme</strong></span>
                 </div>
-                <div class="flex gap-3">
-                    <span class="text-violet-400">3.</span>
-                    <span>Wait for 5 players to join</span>
+                <div class="flex gap-3 items-start p-3 rounded-lg bg-white/5">
+                    <span class="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">3</span>
+                    <span>Room lasts <strong class="text-yellow-400">5 minutes</strong> • 2-10 players</span>
                 </div>
-                <div class="flex gap-3">
-                    <span class="text-violet-400">4.</span>
-                    <span>AI analyzes semantic similarity</span>
+                <div class="flex gap-3 items-start p-3 rounded-lg bg-white/5">
+                    <span class="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">4</span>
+                    <span>If your word <strong class="text-green-400">matches</strong> another player's, you both get bonus XP!</span>
                 </div>
-                <div class="flex gap-3">
-                    <span class="text-violet-400">5.</span>
-                    <span>Most similar words win +50 XP</span>
+                <div class="flex gap-3 items-start p-3 rounded-lg bg-white/5">
+                    <span class="w-6 h-6 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs font-bold">★</span>
+                    <div>
+                        <div>Base: <strong class="text-gray-400">+20 XP</strong></div>
+                        <div>Match bonus: <strong class="text-green-400">+50 XP</strong></div>
+                        <div>Champion: <strong class="text-yellow-400">+100 XP</strong></div>
+                    </div>
                 </div>
             </div>
-            <div class="mt-4 pt-4 border-t border-[#2a2a3e] text-xs text-gray-500">
-                All game data stored on GenLayer blockchain
+            <div class="mt-5 pt-4 border-t border-white/10 text-xs text-gray-500 text-center">
+                🔄 New theme every week • Powered by GenLayer
             </div>
         </div>
     </div>
 
-    <main class="relative max-w-4xl mx-auto px-4 py-6">
+    <main class="relative max-w-4xl mx-auto px-4 py-8">
         <div id="pageGame" class="page active">
-            <div class="text-center mb-6">
-                <h1 class="text-3xl font-bold mb-2"><span class="gradient-text">Consensus Challenge</span></h1>
-                <p class="text-gray-400 text-sm">Submit a keyword • Match with others • Win XP</p>
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold mb-3">
+                    <span class="gradient-text">Consensus Challenge</span>
+                </h1>
+                <p class="text-gray-400 mb-2">Submit a word → Match with players → Win XP rewards</p>
+                <div id="weeklyTheme" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30">
+                    <span class="text-orange-400">📅</span>
+                    <span class="text-orange-300 text-sm font-medium">This Week's Theme: Loading...</span>
+                </div>
             </div>
 
-            <div id="walletNotice" class="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6 text-center">
-                <p class="text-yellow-400 text-sm mb-2">🔗 Connect wallet to play</p>
-                <button onclick="handleWalletClick()" class="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm">Connect MetaMask</button>
-            </div>
-
-            <!-- Live Room -->
-            <div id="liveRoom" class="bg-[#1a1a2e] rounded-lg p-4 mb-6 border border-violet-500/10">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-gray-400 text-sm">Live Room</span>
-                    <span id="liveRoomBadge" class="text-sm text-gray-500">0/5</span>
-                </div>
-                <div id="livePlayerList" class="space-y-1 text-sm">
-                    <p class="text-gray-600">No players yet</p>
-                </div>
-                <button id="joinGameBtn" onclick="scrollToInput()" class="mt-3 w-full py-2 text-sm rounded bg-violet-600 hover:bg-violet-500 text-white">
-                    Join
+            <div id="walletNotice" class="card rounded-xl p-6 mb-6 text-center glow">
+                <div class="text-4xl mb-3">🔗</div>
+                <p class="text-gray-300 mb-4">Connect your wallet to start playing</p>
+                <button onclick="handleWalletClick()" class="px-6 py-3 btn-primary rounded-lg text-white font-medium shadow-lg shadow-orange-500/20">
+                    Connect MetaMask
                 </button>
             </div>
 
+            <!-- Room Status -->
+            <div id="roomList" class="card rounded-xl p-5 mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">🎯</span>
+                        <span class="font-medium text-white">Room Status</span>
+                    </div>
+                    <button onclick="createRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">+ Join / Create</button>
+                </div>
+                <div id="roomListContent" class="space-y-2">
+                    <div class="p-4 rounded-lg bg-white/5 text-center">
+                        <p class="text-gray-400 text-sm">Connect wallet to see room status</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="currentRoom" class="card rounded-xl p-5 mb-6 hidden glow">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">🎮</span>
+                        <span class="text-white font-medium">Room: <span id="currentRoomId" class="text-orange-400">-</span></span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="roomTimer" class="px-3 py-1 rounded-full bg-yellow-500/20 text-yellow-400 text-sm font-medium">60s</span>
+                        <span id="liveRoomBadge" class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm font-medium">0/5</span>
+                    </div>
+                </div>
+                <div id="livePlayerList" class="space-y-2 mb-4 p-3 rounded-lg bg-white/5">
+                    <p class="text-gray-500 text-sm">Waiting for players...</p>
+                </div>
+                <button onclick="leaveRoom()" class="w-full py-2.5 text-sm rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 font-medium transition">Leave Room</button>
+            </div>
+
             <div id="gameArea" class="hidden">
-                <div class="bg-[#161622] border border-violet-500/10 rounded-2xl p-6 mb-6">
+                <div class="card rounded-2xl p-8 mb-6 glow">
                     <div id="stateInput" class="max-w-md mx-auto">
                         <div class="text-center mb-6">
-                            <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#1e1e2f] text-sm">
-                                <span class="text-yellow-400">⏳</span>
-                                Waiting for <span id="playersNeeded">5</span> players
-                                <span id="countdownBadge" class="text-cyan-400 hidden">(🤖 <span id="countdownNum">20</span>s)</span>
-                            </span>
+                            <div class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/5 border border-white/10">
+                                <span class="w-2 h-2 rounded-full bg-yellow-400 pulse-dot"></span>
+                                <span class="text-gray-300">Need <span id="playersNeeded" class="text-yellow-400 font-bold">4</span> more to start</span>
+                                <span id="countdownBadge" class="text-orange-400 font-medium hidden">(<span id="countdownNum">20</span>s)</span>
+                            </div>
                         </div>
-                        <input type="text" id="wordInput" placeholder="Enter a blockchain keyword..." maxlength="50"
-                            class="w-full px-4 py-4 mb-4 bg-[#1e1e2f] border border-[#2a2a3e] rounded-xl text-lg focus:border-violet-500 focus:outline-none"
+                        <input type="text" id="wordInput" placeholder="Enter a keyword related to this week's theme..." maxlength="50"
+                            class="w-full px-5 py-4 mb-4 bg-white/5 border border-white/10 rounded-xl text-lg focus:border-orange-500 focus:outline-none focus:bg-white/10 transition"
                             onkeypress="if(event.key==='Enter')submitWord()">
-                        <button onclick="submitWord()" id="submitBtn" class="w-full py-4 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600">
-                            Submit Word
+                        <button onclick="submitWord()" id="submitBtn" class="w-full py-4 rounded-xl font-bold btn-primary text-white text-lg shadow-lg shadow-orange-500/30 transition hover:scale-[1.02]">
+                            🚀 Submit Word
                         </button>
-                        <p class="text-center text-xs text-gray-500 mt-4">💡 若30秒内未满5人，AI将自动补位开局</p>
+                        <p class="text-center text-xs text-gray-500 mt-4">⏱️ Room lasts 5 min • Match words to win bonus XP!</p>
                     </div>
                     <div id="stateSubmitted" class="hidden max-w-md mx-auto text-center">
-                        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center text-3xl">✓</div>
-                        <h3 class="font-bold text-xl mb-2">Submitted!</h3>
-                        <p class="text-gray-400">Your word: <span id="submittedWordText" class="text-violet-400 font-bold"></span></p>
-                        <p class="text-sm text-gray-500 mt-2">Waiting for <span id="waitingCount">4</span> more...</p>
-                        <p id="countdownText" class="text-sm text-cyan-400 mt-1 hidden">🤖 <span id="countdownNum2">30</span>秒后AI自动补位</p>
+                        <div class="text-6xl mb-4">✅</div>
+                        <h3 class="font-bold text-2xl mb-2 text-white">Submitted!</h3>
+                        <p class="text-gray-400 text-lg">Your word: <span id="submittedWordText" class="gradient-text font-bold"></span></p>
+                        <p class="text-sm text-gray-500 mt-3">Waiting for <span id="waitingCount" class="text-orange-400">1</span> more player to start...</p>
+                        <p id="countdownText" class="text-sm text-orange-400 mt-2 hidden">⏱️ Room closes in <span id="countdownNum2">5:00</span></p>
                     </div>
                     <div id="stateSettling" class="hidden max-w-md mx-auto text-center">
-                        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-violet-500/20 flex items-center justify-center text-3xl animate-pulse">🧠</div>
-                        <h3 class="font-bold text-xl mb-2 gradient-text">AI Analyzing...</h3>
+                        <div class="text-6xl mb-4 animate-bounce">🤖</div>
+                        <h3 class="font-bold text-2xl mb-2 gradient-text">Calculating Results...</h3>
+                        <p class="text-gray-400">Finding matching words and distributing XP</p>
                     </div>
                     <div id="stateResult" class="hidden max-w-lg mx-auto">
                         <div class="text-center mb-6">
-                            <h3 id="resultTitle" class="font-bold text-2xl mb-1">🎉 Game Complete!</h3>
-                            <p class="text-gray-400 text-sm">Theme: <span id="resultTheme" class="text-cyan-400"></span></p>
+                            <div class="text-5xl mb-3">🏆</div>
+                            <h3 id="resultTitle" class="font-bold text-2xl mb-1 text-white">Game Complete!</h3>
+                            <p class="text-gray-400">Theme: <span id="resultTheme" class="gradient-text font-medium"></span></p>
                         </div>
-                        <div id="resultList" class="bg-[#1e1e2f] rounded-xl p-4 mb-4 space-y-2"></div>
-                        <button onclick="startNewRound()" class="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-purple-700">Play Again</button>
+                        <div id="resultList" class="card rounded-xl p-4 mb-4 space-y-2"></div>
+                        <button onclick="startNewRound()" class="w-full py-3 rounded-xl font-bold btn-primary text-white shadow-lg shadow-orange-500/30">🔄 Play Again</button>
                     </div>
                 </div>
                 <div class="grid sm:grid-cols-2 gap-4">
-                    <div class="bg-[#161622] border border-violet-500/10 rounded-xl p-5">
-                        <h3 class="text-sm text-gray-400 mb-4">⭐ Your Stats</h3>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="bg-[#1e1e2f] rounded-lg p-4 text-center">
-                                <div id="userXP" class="text-2xl font-bold gradient-text">0</div>
-                                <div class="text-xs text-gray-500">XP</div>
+                    <div class="card rounded-xl p-5">
+                        <h3 class="text-sm text-gray-400 mb-4 flex items-center gap-2">📊 Your Stats</h3>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-white/5 rounded-lg p-4 text-center">
+                                <div id="userXP" class="text-3xl font-bold gradient-text">0</div>
+                                <div class="text-xs text-gray-500 mt-1">Total XP</div>
                             </div>
-                            <div class="bg-[#1e1e2f] rounded-lg p-4 text-center">
-                                <div id="userRank" class="text-2xl font-bold text-cyan-400">-</div>
-                                <div class="text-xs text-gray-500">Rank</div>
+                            <div class="bg-white/5 rounded-lg p-4 text-center">
+                                <div id="userRank" class="text-3xl font-bold text-yellow-400">-</div>
+                                <div class="text-xs text-gray-500 mt-1">Rank</div>
                             </div>
                         </div>
-                        <div class="mt-4 p-3 bg-[#1e1e2f] rounded-lg">
-                            <div class="text-xs text-gray-500 mb-1">Wallet</div>
-                            <div id="walletDisplay" class="text-xs text-violet-400 break-all">-</div>
+                        <div class="mt-4 p-3 bg-white/5 rounded-lg">
+                            <div class="text-xs text-gray-500 mb-1">Connected Wallet</div>
+                            <div id="walletDisplay" class="text-sm text-orange-400 font-mono">-</div>
                         </div>
                     </div>
-                    <div class="bg-[#161622] border border-violet-500/10 rounded-xl p-5">
+                    <div class="card rounded-xl p-5">
                         <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-sm text-gray-400">👥 Room</h3>
+                            <h3 class="text-sm text-gray-400 flex items-center gap-2">👥 Room Status</h3>
                             <div class="flex items-center gap-2">
-                                <span id="roomCountdown" class="text-xs text-cyan-400 hidden">🤖 20s</span>
-                                <span id="roomBadge" class="px-2 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-400">0/5</span>
+                                <span id="roomCountdown" class="text-xs text-orange-400 hidden">⏱️ 20s</span>
+                                <span id="roomBadge" class="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400 font-medium">0/5</span>
                             </div>
                         </div>
-                        <div class="h-1.5 bg-[#1e1e2f] rounded-full overflow-hidden mb-4">
-                            <div id="roomProgress" class="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all" style="width:0%"></div>
+                        <div class="h-2 bg-white/5 rounded-full overflow-hidden mb-4">
+                            <div id="roomProgress" class="h-full bg-gradient-to-r from-orange-500 to-yellow-500 transition-all duration-500" style="width:0%"></div>
                         </div>
                         <div id="playerSlots" class="flex flex-wrap gap-2"></div>
                     </div>
@@ -176,127 +222,283 @@
         </div>
 
         <div id="pageLeaderboard" class="page">
-            <div class="bg-[#161622] border border-violet-500/10 rounded-2xl p-6">
-                <h1 class="font-bold text-xl mb-6">🏆 Leaderboard</h1>
+            <div class="card rounded-2xl p-6">
+                <h1 class="font-bold text-2xl mb-6 flex items-center gap-2">🏆 Leaderboard</h1>
                 <div id="leaderboardList" class="space-y-2"></div>
             </div>
         </div>
 
         <div id="pageHistory" class="page">
-            <div class="bg-[#161622] border border-violet-500/10 rounded-2xl p-6">
-                <h1 class="font-bold text-xl mb-6">📜 History</h1>
+            <div class="card rounded-2xl p-6">
+                <h1 class="font-bold text-2xl mb-6 flex items-center gap-2">📜 Game History</h1>
                 <div id="historyList" class="space-y-4"></div>
             </div>
         </div>
 
         <!-- Contract Info -->
-        <div class="mt-6 text-center">
-            <p class="text-gray-500 text-xs mb-1">📜 Contract Address (GenLayer Testnet)</p>
+        <div class="mt-8 text-center p-4 rounded-lg bg-white/5">
+            <p class="text-gray-500 text-xs mb-2">🔗 Smart Contract (GenLayer Testnet)</p>
             <a href="https://studio.genlayer.com" target="_blank" 
-               class="text-violet-400 hover:text-purple-300 text-xs font-mono break-all">
-                0xD4e85A9b3687817CdDBd481a05e238b77e57c79D
+               class="text-orange-400 hover:text-orange-300 text-xs font-mono transition">
+                0x8443995060C9dd4bBE97A9e7e39F4E73c43cCb19
             </a>
         </div>
     </main>
 
-    <div id="toast" class="fixed bottom-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm transition-all translate-x-full opacity-0"></div>
+    <footer class="text-center py-6 text-gray-600 text-xs">
+        Built with 💜 on GenLayer
+    </footer>
+
+    <div id="toast" class="fixed bottom-4 right-4 z-50 px-5 py-3 rounded-xl shadow-2xl text-white text-sm font-medium transition-all translate-x-full opacity-0"></div>
 
     <script>
         // ========== CONTRACT CONFIG ==========
         const CONTRACT = {
-            address: '0xD4e85A9b3687817CdDBd481a05e238b77e57c79D',
-            rpcUrl: 'https://studio.genlayer.com/api',
-            chainId: 61999
+            address: '0x8443995060C9dd4bBE97A9e7e39F4E73c43cCb19',
+            rpcUrl: 'https://studio.genlayer.com/api/json-rpc',
+            chainId: 61983
         };
+
+        // ========== GAME CONFIG ==========
+        const GAME_CONFIG = {
+            roomDuration: 5 * 60,  // 5分钟房间时间
+            minPlayers: 2,         // 最少2人开始
+            maxPlayers: 10,        // 最多10人
+            aiDelay: 3 * 60,       // 3分钟后AI开始补位
+            xpWinner: 100,         // 赢家XP
+            xpParticipant: 20,     // 参与者XP
+            xpBonus: 50            // 匹配奖励XP
+        };
+        
+        // 每周主题系统
+        const WEEKLY_THEMES = [
+            { name: 'DeFi Week', keywords: ['swap', 'liquidity', 'yield', 'farm', 'pool', 'stake', 'lend', 'borrow', 'apy', 'tvl'] },
+            { name: 'NFT Week', keywords: ['mint', 'collection', 'rare', 'art', 'creator', 'royalty', 'metadata', 'opensea', 'pfp', 'drop'] },
+            { name: 'Layer2 Week', keywords: ['rollup', 'zk', 'optimistic', 'bridge', 'scaling', 'gas', 'fast', 'cheap', 'arbitrum', 'polygon'] },
+            { name: 'DAO Week', keywords: ['vote', 'proposal', 'governance', 'treasury', 'delegate', 'quorum', 'snapshot', 'multisig', 'council', 'token'] },
+            { name: 'Security Week', keywords: ['audit', 'hack', 'exploit', 'bug', 'bounty', 'safe', 'verify', 'secure', 'risk', 'insurance'] }
+        ];
+        
+        function getWeeklyTheme() {
+            const weekNum = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000));
+            return WEEKLY_THEMES[weekNum % WEEKLY_THEMES.length];
+        }
+        
+        function getWeeklyKeywords() {
+            return getWeeklyTheme().keywords;
+        }
 
         // ========== STATE ==========
         let wallet = { connected: false, address: '', short: '' };
-        let game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
-        const AI_WORDS = ['node','chain','block','token','gas','hash','mint','swap','stake','vote','dao','nft'];
-        const AI_NAMES = ['Bot-1','Bot-2','Bot-3','Bot-4','Bot-5'];
-        let history = [{ id:1, theme:'decentralization', winners:['0x1234...5678'], words:['decentralized','distributed','consensus'] }];
-        let leaderboard = [{ addr:'0x1234...5678', xp:350 }, { addr:'0xabcd...ef12', xp:280 }, { addr:'0x9876...5432', xp:150 }];
+        let game = { 
+            state: 'input', 
+            word: '', 
+            players: [], 
+            countdown: null, 
+            interval: null, 
+            lastTime: Date.now(), 
+            txPending: false, 
+            pollingInterval: null, 
+            aiTimeout: null,
+            roomStartTime: null,
+            theme: getWeeklyTheme()
+        };
+        const AI_WORDS = getWeeklyKeywords();
+        const AI_NAMES = ['Bot-Alpha','Bot-Beta','Bot-Gamma','Bot-Delta','Bot-Omega'];
+        
+        // 从localStorage加载数据
+        let history = JSON.parse(localStorage.getItem('genlayer_history')) || [];
+        let leaderboard = JSON.parse(localStorage.getItem('genlayer_leaderboard')) || [];
+        
+        // 保存到localStorage的函数
+        function saveLeaderboard() {
+            localStorage.setItem('genlayer_leaderboard', JSON.stringify(leaderboard));
+        }
+        function saveHistory() {
+            localStorage.setItem('genlayer_history', JSON.stringify(history));
+        }
+        
+        // ========== ROOM SYSTEM ==========
+        let currentRoomId = null;
+        let roomTimerInterval = null;
 
         // ========== INIT ==========
+        let globalPollingInterval = null;
+        let pollCount = 0;
+        
+        // 初始化主题显示
+        function initTheme() {
+            const theme = getWeeklyTheme();
+            document.getElementById('weeklyTheme').innerHTML = `
+                <span class="text-orange-400">📅</span>
+                <span class="text-orange-300 text-sm font-medium">This Week: ${theme.name}</span>
+                <span class="text-gray-500 text-xs">(${theme.keywords.slice(0,3).join(', ')}...)</span>
+            `;
+        }
+        
+        initTheme();
         renderRoom();
         renderLeaderboard();
         renderHistory();
         checkWalletConnection();
-        startGlobalRoomPolling(); // 启动全局房间轮询
+        startRoomListPolling();
 
-        // 全局房间轮询（即使未连接钱包也能看到）
-        let globalPollingInterval = null;
-        function startGlobalRoomPolling() {
-            if (globalPollingInterval) return;
-            
-            // 立即获取一次
-            fetchLiveRoom();
-            
-            // 每3秒更新
-            globalPollingInterval = setInterval(fetchLiveRoom, 3000);
+        // ========== ROOM MANAGEMENT ==========
+        function startRoomListPolling() {
+            // 先停止之前的轮询
+            if (globalPollingInterval) {
+                clearInterval(globalPollingInterval);
+                globalPollingInterval = null;
+            }
+            refreshRoomList();
+            globalPollingInterval = setInterval(() => {
+                refreshRoomList();
+            }, 3000);
         }
 
-        async function fetchLiveRoom() {
-            try {
-                const status = await readContract('get_game_status', []);
-                if (status && status.addresses) {
-                    renderLiveRoom(status.addresses, status.words);
+        let isSettling = false;
+        
+        async function refreshRoomList() {
+            // 如果正在结算或已结算，跳过刷新
+            if (isSettling || game.state === 'settling' || game.state === 'result') return;
+            
+            // 从链上读取房间状态
+            const status = await readContract('get', []);
+            console.log('Chain room status:', status);
+            
+            const container = document.getElementById('roomListContent');
+            
+            // 合约返回 "word1,word2,word3" 格式
+            let chainWords = [];
+            if (status && typeof status === 'string' && status.trim() !== '') {
+                chainWords = status.split(',').map(w => w.trim()).filter(w => w);
+            }
+            
+            // 如果用户已提交词语，不覆盖game.players
+            if (game.state !== 'submitted' && game.state !== 'settling') {
+                game.players = chainWords.map((w, i) => ({
+                    addr: 'Player ' + (i+1),
+                    word: w,
+                    ai: false
+                }));
+            }
+            
+            // 计算当前玩家数和需要的人数
+            const playerCount = game.players.length;
+            const needed = Math.max(0, GAME_CONFIG.minPlayers - playerCount);
+            const max = GAME_CONFIG.maxPlayers;
+            
+            // 更新人数显示
+            document.getElementById('playersNeeded').textContent = needed > 0 ? needed : 'Ready';
+            document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
+            
+            if (playerCount > 0) {
+                const emptySlots = Math.min(3, max - playerCount);
+                container.innerHTML = `
+                    <div class="p-4 rounded-lg bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/30">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-2xl">🎮</span>
+                                <div>
+                                    <div class="text-white font-bold">${playerCount}/${max} Players</div>
+                                    <div class="text-xs text-gray-400">${playerCount < GAME_CONFIG.minPlayers ? `Need ${needed} more to start` : 'Ready to play!'}</div>
+                                    <div class="text-xs text-orange-400 mt-1">📅 ${game.theme.name}</div>
+                                </div>
+                            </div>
+                            ${!game.word ? `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
+                            ${playerCount >= max ? '<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Full</span>' : ''}
+                        </div>
+                        <div class="space-y-2 max-h-64 overflow-y-auto">
+                            ${game.players.map((p, i) => `
+                                <div class="flex items-center justify-between p-2 rounded bg-white/5">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-8 h-8 rounded-full ${p.ai ? 'bg-blue-500/20' : 'bg-orange-500/20'} flex items-center justify-center text-sm">${p.ai ? '🤖' : '👤'}</span>
+                                        <span class="text-gray-300">${p.addr}</span>
+                                        ${p.ai ? '<span class="px-1 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
+                                    </div>
+                                    <span class="px-2 py-1 rounded bg-green-500/20 text-green-400 text-xs">${p.word}</span>
+                                </div>
+                            `).join('')}
+                            ${Array(emptySlots).fill(0).map((_, i) => `
+                                <div class="flex items-center justify-between p-2 rounded bg-white/5 border border-dashed border-gray-700">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-8 h-8 rounded-full bg-gray-700/50 flex items-center justify-center text-sm">❓</span>
+                                        <span class="text-gray-500">Waiting...</span>
+                                    </div>
+                                    <span class="px-2 py-1 rounded bg-gray-700/50 text-gray-500 text-xs">Empty</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                
+                renderRoom();
+                
+                // 检查是否满员
+                if (playerCount >= max && !isSettling && game.state !== 'settling' && game.state !== 'result') {
+                    isSettling = true;
+                    // 立即停止轮询防止重复触发
+                    if (globalPollingInterval) {
+                        clearInterval(globalPollingInterval);
+                        globalPollingInterval = null;
+                    }
+                    toast('🎮 Room full! Game starting!', 'bg-green-600');
+                    setTimeout(() => settle(), 2000);
                 }
-            } catch (err) {
-                console.error('获取房间状态失败:', err);
+                
+            } else {
+                container.innerHTML = `
+                    <div class="p-4 rounded-lg bg-white/5 text-center">
+                        <div class="text-3xl mb-2">🎯</div>
+                        <p class="text-gray-300 mb-1">No active room</p>
+                        <p class="text-gray-500 text-sm">Be the first to start a game!</p>
+                    </div>
+                `;
             }
         }
 
-        function renderLiveRoom(addresses, words) {
-            const count = addresses.length;
-            
-            // 更新计数
-            document.getElementById('liveRoomBadge').textContent = count + '/5';
-            document.getElementById('liveRoomBadge').className = 'text-sm ' + (count > 0 ? 'text-violet-400' : 'text-gray-500');
-            
-            // 玩家列表
-            const listEl = document.getElementById('livePlayerList');
-            if (count === 0) {
-                listEl.innerHTML = '<p class="text-gray-600">No players yet</p>';
-            } else {
-                listEl.innerHTML = addresses.map((addr, i) => {
-                    const short = addr.slice(0, 6) + '...' + addr.slice(-4);
-                    const isMe = wallet.connected && addr.toLowerCase() === wallet.address.toLowerCase();
-                    return `<div class="flex justify-between ${isMe ? 'text-violet-400' : 'text-gray-400'}">
-                        <span>${isMe ? 'you' : short}</span>
-                        <span class="text-gray-500">${words[i]}</span>
-                    </div>`;
-                }).join('');
-            }
-            
-            // 按钮
-            const btn = document.getElementById('joinGameBtn');
-            const joined = wallet.connected && addresses.some(a => a.toLowerCase() === wallet.address.toLowerCase());
-            
-            if (count >= 5) {
-                btn.textContent = 'Full';
-                btn.disabled = true;
-                btn.className = 'mt-3 w-full py-2 text-sm rounded bg-[#252538] text-gray-500 cursor-not-allowed';
-            } else if (joined) {
-                btn.textContent = 'Waiting...';
-                btn.disabled = true;
-                btn.className = 'mt-3 w-full py-2 text-sm rounded bg-[#252538] text-gray-400 cursor-not-allowed';
-            } else {
-                btn.textContent = 'Join';
-                btn.disabled = false;
-                btn.className = 'mt-3 w-full py-2 text-sm rounded bg-violet-600 hover:bg-violet-500 text-white';
-            }
-        }
-
-        function scrollToInput() {
+        function joinChainRoom() {
             if (!wallet.connected) {
-                handleWalletClick();
+                toast('Connect wallet first', 'bg-red-600');
                 return;
             }
-            document.getElementById('wordInput').scrollIntoView({ behavior: 'smooth' });
-            document.getElementById('wordInput').focus();
+            // 显示游戏区域让用户提交词语
+            document.getElementById('walletNotice').classList.add('hidden');
+            document.getElementById('gameArea').classList.remove('hidden');
+            toast('Enter a word to join the game!', 'bg-orange-500');
         }
 
+        // 链上游戏不需要创建房间，直接提交词语即可
+        function createRoom() {
+            if (!wallet.connected) {
+                toast('Please connect wallet first', 'bg-red-600');
+                return;
+            }
+            document.getElementById('walletNotice').classList.add('hidden');
+            document.getElementById('gameArea').classList.remove('hidden');
+            toast('Enter a word to start/join game!', 'bg-orange-500');
+        }
+
+        function leaveRoom() {
+            currentRoomId = null;
+            document.getElementById('currentRoom').classList.add('hidden');
+            game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
+            showState('input');
+            renderRoom();
+        }
+
+        function showCurrentRoom(playerCount) {
+            document.getElementById('currentRoom').classList.remove('hidden');
+            document.getElementById('currentRoomId').textContent = 'Chain Game';
+            document.getElementById('liveRoomBadge').textContent = playerCount + '/5';
+        }
+
+        // 监听 localStorage 变化（备用同步）
+        window.addEventListener('storage', (e) => {
+            refreshRoomList();
+        });
+
+        // ========== WALLET ==========
         function showHelp() {
             document.getElementById('helpModal').classList.remove('hidden');
             document.getElementById('helpModal').classList.add('flex');
@@ -307,12 +509,13 @@
             document.getElementById('helpModal').classList.remove('flex');
         }
 
-        // 切换到 GenLayer 网络
+        //  GenLayer 
         async function switchToGenLayer() {
             try {
+                // 先尝试切换到 GenLayer
                 await window.ethereum.request({
                     method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: '0xF21F' }]
+                    params: [{ chainId: '0xf21f' }]
                 });
                 return true;
             } catch (err) {
@@ -321,7 +524,7 @@
                         await window.ethereum.request({
                             method: 'wallet_addEthereumChain',
                             params: [{
-                                chainId: '0xF21F',
+                                chainId: '0xf21f',
                                 chainName: 'GenLayer Testnet',
                                 nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 },
                                 rpcUrls: ['https://studio.genlayer.com/api'],
@@ -330,9 +533,19 @@
                         });
                         return true;
                     } catch (addErr) {
+                        // 忽略"已存在"错误
+                        if (addErr.message && addErr.message.includes('same RPC')) {
+                            console.log('Network already exists, continuing...');
+                            return true;
+                        }
                         console.error('Add network error:', addErr);
                         return false;
                     }
+                }
+                // 忽略"已存在"错误
+                if (err.message && err.message.includes('same RPC')) {
+                    console.log('Network already exists, continuing...');
+                    return true;
                 }
                 console.error('Switch network error:', err);
                 return false;
@@ -351,7 +564,7 @@
                 console.log('Check connection error:', e);
             }
             
-            // 监听账户变化
+            // 
             window.ethereum.on('accountsChanged', function(accounts) {
                 if (accounts && accounts.length > 0) {
                     onConnected(accounts[0]);
@@ -368,13 +581,13 @@
             }
             
             if (typeof window.ethereum === 'undefined') {
-                toast('请先安装 MetaMask!', 'bg-red-600');
+                toast(' MetaMask!', 'bg-red-600');
                 window.open('https://metamask.io/download/', '_blank');
                 return;
             }
 
             try {
-                document.getElementById('walletBtn').textContent = '连接中...';
+                document.getElementById('walletBtn').textContent = '...';
                 
                 const accounts = await window.ethereum.request({ 
                     method: 'eth_requestAccounts' 
@@ -386,11 +599,11 @@
             } catch (err) {
                 console.error('Connection error:', err);
                 if (err.code === 4001) {
-                    toast('连接被拒绝', 'bg-red-600');
+                    toast('', 'bg-red-600');
                 } else if (err.code === -32002) {
-                    toast('请检查 MetaMask 弹窗', 'bg-yellow-600');
+                    toast(' MetaMask ', 'bg-yellow-600');
                 } else {
-                    toast('连接失败: ' + err.message, 'bg-red-600');
+                    toast(': ' + err.message, 'bg-red-600');
                 }
                 document.getElementById('walletBtn').textContent = 'Connect Wallet';
             }
@@ -402,35 +615,39 @@
             wallet.short = address.slice(0, 6) + '...' + address.slice(-4);
             
             document.getElementById('walletBtn').textContent = wallet.short;
-            document.getElementById('walletBtn').classList.add('border-violet-500', 'bg-violet-600/10', 'text-violet-400');
-            document.getElementById('statusDot').className = 'w-2 h-2 rounded-full bg-green-500';
+            document.getElementById('walletBtn').classList.add('border-orange-500', 'bg-orange-500/10', 'text-orange-400');
+            document.getElementById('statusDot').className = 'w-2 h-2 rounded-full bg-green-500 pulse-dot';
             document.getElementById('networkName').textContent = 'GenLayer';
             document.getElementById('walletDisplay').textContent = address;
             document.getElementById('walletNotice').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
             
-            // 检查并切换网络
+            // 显示header XP
+            document.getElementById('headerXP').classList.remove('hidden');
+            document.getElementById('headerXP').classList.add('flex');
+            
+            // 检查网络（GenLayer Studio chainId 可能是 0xf21f 或 0xf22f）
             const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-            if (chainId !== '0xF21F') {
-                toast('切换到 GenLayer 网络...', 'bg-yellow-600');
-                await switchToGenLayer();
+            console.log('Current chainId:', chainId);
+            if (!chainId.toLowerCase().startsWith('0xf2')) {
+                toast('Please switch to GenLayer network', 'bg-yellow-600');
             }
 
-            toast('已连接: ' + wallet.short, 'bg-green-600');
+            toast('Connected: ' + wallet.short, 'bg-green-600');
             
-            // 从合约获取数据
             await loadContractData();
+            updateHeaderXP();
         }
 
         async function loadContractData() {
             try {
-                // 从链上获取排行榜
+                // 
                 await fetchLeaderboard();
                 
-                // 从链上获取历史
+                // 
                 await fetchHistory();
                 
-                // 从链上同步当前房间状态
+                // 
                 await syncRoomFromChain();
                 
             } catch (err) {
@@ -438,14 +655,14 @@
             }
         }
 
-        // 从链上同步房间状态
+        // 
         async function syncRoomFromChain() {
             try {
-                const status = await readContract('get_game_status', []);
-                console.log('📡 链上房间状态:', status);
+                const status = await readContract('get', []);
+                console.log(' :', status);
                 
                 if (status && status.addresses && status.words) {
-                    // 清空本地房间，用链上数据
+                    // 
                     game.players = [];
                     
                     for (let i = 0; i < status.addresses.length; i++) {
@@ -460,7 +677,7 @@
                             fullAddr: addr
                         });
                         
-                        // 如果是自己，切换到已提交状态
+                        // 
                         if (isMe) {
                             game.word = word;
                             showState('submitted');
@@ -469,14 +686,16 @@
                     }
                     
                     renderRoom();
-                    document.getElementById('playersNeeded').textContent = 5 - game.players.length;
+                    const syncNeeded = Math.max(0, GAME_CONFIG.minPlayers - game.players.length);
+                    document.getElementById('playersNeeded').textContent = syncNeeded > 0 ? syncNeeded : 'Ready';
+                    document.getElementById('waitingCount').textContent = syncNeeded > 0 ? syncNeeded : 'Ready';
                     
-                    // 如果有玩家但自己还没提交，启动轮询
+                    // 
                     if (game.players.length > 0 && !game.players.some(p => p.fullAddr?.toLowerCase() === wallet.address.toLowerCase())) {
                         startPolling();
                     }
                     
-                    // 如果自己已提交，启动倒计时和轮询
+                    // 
                     if (game.state === 'submitted') {
                         startCountdown();
                         startPolling();
@@ -491,7 +710,7 @@
             wallet = { connected: false, address: '', short: '' };
             
             document.getElementById('walletBtn').textContent = 'Connect Wallet';
-            document.getElementById('walletBtn').classList.remove('border-violet-500', 'bg-violet-600/10', 'text-violet-400');
+            document.getElementById('walletBtn').classList.remove('border-orange-500', 'bg-orange-500/10', 'text-orange-400');
             document.getElementById('statusDot').className = 'w-2 h-2 rounded-full bg-red-500';
             document.getElementById('networkName').textContent = 'Offline';
             document.getElementById('walletDisplay').textContent = '-';
@@ -499,7 +718,7 @@
             document.getElementById('gameArea').classList.add('hidden');
             
             startNewRound();
-            toast('已断开连接', 'bg-gray-600');
+            toast('', 'bg-gray-600');
         }
 
         // ========== PAGES ==========
@@ -507,10 +726,10 @@
             document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
             document.getElementById('page' + p.charAt(0).toUpperCase() + p.slice(1)).classList.add('active');
             document.querySelectorAll('nav button').forEach(b => {
-                b.classList.remove('bg-violet-600/20', 'text-violet-400');
+                b.classList.remove('bg-orange-500/20', 'text-orange-400');
                 b.classList.add('text-gray-400');
             });
-            document.getElementById('tab' + p.charAt(0).toUpperCase() + p.slice(1)).classList.add('bg-violet-600/20', 'text-violet-400');
+            document.getElementById('tab' + p.charAt(0).toUpperCase() + p.slice(1)).classList.add('bg-orange-500/20', 'text-orange-400');
             document.getElementById('tab' + p.charAt(0).toUpperCase() + p.slice(1)).classList.remove('text-gray-400');
         }
 
@@ -527,94 +746,83 @@
             const input = document.getElementById('wordInput');
             const w = input.value.trim().toLowerCase();
             
-            if (!w) { toast('请输入关键词', 'bg-red-600'); return; }
-            if (!wallet.connected) { toast('请先连接钱包', 'bg-red-600'); return; }
-            if (game.players.some(p => p.addr === wallet.short)) { toast('已提交过了', 'bg-red-600'); return; }
-            if (game.txPending) { toast('交易处理中...', 'bg-yellow-600'); return; }
+            if (!w) { toast('Please enter a word', 'bg-red-600'); return; }
+            if (!wallet.connected) { toast('Please connect wallet', 'bg-red-600'); return; }
+            if (game.txPending) { toast('Transaction pending...', 'bg-yellow-600'); return; }
 
             const submitBtn = document.getElementById('submitBtn');
             const wordInput = document.getElementById('wordInput');
             
-            // 1. 锁定UI - 禁用按钮和输入框
             submitBtn.disabled = true;
-            submitBtn.textContent = '⏳ Processing...';
+            submitBtn.textContent = 'Submitting...';
             wordInput.disabled = true;
             game.txPending = true;
             
-            toast('📤 请在钱包中确认交易...', 'bg-violet-600');
+            toast('Sending to chain...', 'bg-orange-500');
 
             try {
-                // 2. 调用合约 - 等待用户在钱包确认
-                const txResult = await callContract('submit_word', [w]);
+                // 发送到链上
+                const txResult = await callContract('add', [w]);
                 
-                // 3. 检查交易结果 - 只有成功才切换UI
                 if (txResult.success && txResult.hash) {
-                    toast('⏳ 交易已发送，等待确认...', 'bg-yellow-600');
-                    submitBtn.textContent = '⏳ Confirming...';
-                    
-                    // 等待交易确认（模拟等待区块确认）
-                    await waitForConfirmation(txResult.hash);
-                    
-                    // 4. 交易确认成功 - 现在才切换UI状态
                     game.word = w;
-                    game.players.push({ addr: wallet.short, word: w, ai: false });
+                    
+                    // 添加自己到玩家列表
+                    if (!game.players.some(p => p.fullAddr?.toLowerCase() === wallet.address.toLowerCase())) {
+                        game.players.push({
+                            addr: wallet.short,
+                            fullAddr: wallet.address,
+                            word: w,
+                            ai: false
+                        });
+                    }
+                    
                     document.getElementById('submittedWordText').textContent = w;
                     wordInput.value = '';
                     
-                    // 切换到等待状态
+                    // 更新人数显示
+                    const needed = GAME_CONFIG.minPlayers - game.players.length;
+                    document.getElementById('playersNeeded').textContent = needed > 0 ? needed : 'Ready';
+                    document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
+                    
                     showState('submitted');
-                    renderRoom();
-                    startCountdown();
+                    toast('Submitted! TX: ' + txResult.hash.slice(0, 10) + '...', 'bg-green-600');
                     
-                    toast('✅ 链上提交成功! TX: ' + txResult.hash.slice(0, 10) + '...', 'bg-green-600');
-                    
-                    // 保持按钮为已提交状态
-                    submitBtn.textContent = '✓ Submitted';
+                    submitBtn.textContent = 'Submitted ✓';
                     submitBtn.disabled = true;
                     
-                    checkFull();
-                    
-                    // 启动状态轮询
-                    startPolling();
-                    
-                    // 启动30秒AI补位超时
+                    // 启动房间计时器
+                    startCountdown();
                     startAITimeout();
                     
-                    // 刷新排行榜
-                    setTimeout(async () => {
-                        await fetchLeaderboard();
-                        await fetchHistory();
-                    }, 3000);
+                    // 刷新房间列表
+                    setTimeout(() => refreshRoomList(), 2000);
+                    renderRoom();
                     
-                    // 成功时不重置按钮，保持锁定
                     game.txPending = false;
                     return;
                     
                 } else {
-                    // 交易失败
-                    throw new Error(txResult.error || '交易失败');
+                    throw new Error(txResult.error || 'Transaction failed');
                 }
                 
             } catch (err) {
                 console.error('Submit error:', err);
                 
-                // 5. 异常回滚 - 区分用户拒绝和其他错误
-                if (err.code === 4001 || err.message?.includes('用户取消') || err.message?.includes('rejected')) {
-                    toast('❌ 交易已取消', 'bg-gray-600');
+                if (err.code === 4001 || err.message?.includes('denied') || err.message?.includes('rejected')) {
+                    toast('Transaction cancelled', 'bg-gray-600');
                 } else {
-                    toast('❌ 提交失败: ' + (err.message || '未知错误'), 'bg-red-600');
+                    toast('Error: ' + (err.message || 'Unknown'), 'bg-red-600');
                 }
                 
-                // 回滚UI状态 - 恢复输入界面
                 game.txPending = false;
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Submit Word';
                 wordInput.disabled = false;
-                // 保持在输入界面，不切换状态
             }
         }
 
-        // 等待交易确认
+        // 
         async function waitForConfirmation(txHash, maxWait = 30000) {
             const startTime = Date.now();
             
@@ -627,89 +835,103 @@
                     
                     if (receipt) {
                         if (receipt.status === '0x1') {
-                            return true; // 交易成功
+                            return true; // 
                         } else {
-                            throw new Error('交易被回滚');
+                            throw new Error('');
                         }
                     }
                 } catch (err) {
-                    if (err.message?.includes('回滚')) throw err;
+                    if (err.message?.includes('')) throw err;
                 }
                 
-                // 等待2秒后重试
+                // 2
                 await new Promise(r => setTimeout(r, 2000));
             }
             
-            // 超时但交易可能仍在处理，假设成功
-            console.warn('交易确认超时，假设成功');
+            // 
+            console.warn('');
             return true;
         }
 
-        // 调用合约方法 - 通过 MetaMask 发送真实交易
+        //  -  MetaMask 
         async function callContract(method, args) {
             try {
-                // 构建 GenLayer 交易数据
                 const callData = JSON.stringify({ method: method, args: args });
                 const hexData = '0x' + Array.from(new TextEncoder().encode(callData))
                     .map(b => b.toString(16).padStart(2, '0')).join('');
 
-                console.log('📤 Sending TX to GenLayer:', { method, args, hexData });
+                console.log('Sending TX to GenLayer:', { method, args, hexData });
 
-                // 通过 MetaMask 发送交易
                 const txHash = await window.ethereum.request({
                     method: 'eth_sendTransaction',
                     params: [{
                         from: wallet.address,
                         to: CONTRACT.address,
-                        data: hexData,
-                        gas: '0x30D40',
-                        gasPrice: '0x3B9ACA00'
+                        data: hexData
                     }]
                 });
 
-                console.log('📥 TX Hash:', txHash);
+                console.log('TX Hash:', txHash);
                 return { success: true, hash: txHash };
 
             } catch (err) {
                 console.error('Contract call error:', err);
                 if (err.code === 4001) {
-                    return { success: false, error: '用户取消交易' };
+                    return { success: false, error: 'User cancelled' };
                 }
                 return { success: false, error: err.message };
             }
         }
 
-        // 读取合约状态 - 通过 JSON-RPC
+        // 读取合约 - 使用 GenLayer gen_call API
         async function readContract(method, args = []) {
             try {
-                const response = await fetch(CONTRACT.rpcUrl, {
+                // 方法1: 尝试直接 JSON 格式
+                const response = await fetch('https://studio.genlayer.com/api', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         jsonrpc: '2.0',
-                        method: 'eth_call',
+                        method: 'gen_call',
                         params: [{
+                            from: '0x0000000000000000000000000000000000000000',
                             to: CONTRACT.address,
-                            data: '0x' + Array.from(new TextEncoder().encode(
-                                JSON.stringify({ method: method, args: args })
-                            )).map(b => b.toString(16).padStart(2, '0')).join('')
-                        }, 'latest'],
+                            data: JSON.stringify({ method: method, args: args }),
+                            type: 'read'
+                        }],
                         id: Date.now()
                     })
                 });
-                const result = await response.json();
-                if (result.error) return null;
                 
-                // 解码返回值
-                if (result.result && result.result !== '0x') {
-                    try {
-                        const hex = result.result.slice(2);
-                        const bytes = hex.match(/.{1,2}/g).map(b => parseInt(b, 16));
-                        const text = new TextDecoder().decode(new Uint8Array(bytes));
-                        return JSON.parse(text);
-                    } catch {
-                        return result.result;
+                const result = await response.json();
+                console.log('gen_call result:', result);
+                
+                if (result.error) {
+                    console.error('RPC error:', result.error);
+                    return null;
+                }
+                
+                if (result.result) {
+                    let data = result.result;
+                    // 如果是字符串，尝试解析
+                    if (typeof data === 'string') {
+                        // 去掉可能的引号
+                        if (data.startsWith('"') && data.endsWith('"')) {
+                            data = data.slice(1, -1);
+                        }
+                        // 解码转义字符
+                        data = data.replace(/\\"/g, '"');
+                        // 解析 JSON
+                        if (data.includes('{')) {
+                            try {
+                                data = JSON.parse(data);
+                            } catch (e) {
+                                console.log('JSON parse failed:', e);
+                            }
+                        }
                     }
+                    console.log('Parsed data:', data);
+                    return data;
                 }
                 return null;
             } catch (err) {
@@ -718,13 +940,14 @@
             }
         }
 
-        // 从链上获取排行榜
+        // 
         async function fetchLeaderboard() {
             try {
-                console.log('📊 Fetching leaderboard from chain...');
+                console.log('Fetching leaderboard from chain...');
                 const data = await readContract('get_leaderboard', []);
+                console.log('Leaderboard data:', data);
                 
-                if (data && typeof data === 'object') {
+                if (data && typeof data === 'object' && Object.keys(data).length > 0) {
                     leaderboard = Object.entries(data)
                         .map(([addr, xp]) => ({ 
                             addr: addr.slice(0, 6) + '...' + addr.slice(-4), 
@@ -745,18 +968,25 @@
                         const me = leaderboard.find(p => 
                             p.fullAddr.toLowerCase() === wallet.address.toLowerCase()
                         );
-                        if (me) {
-                            document.getElementById('userXP').textContent = me.xp;
-                        }
+                        document.getElementById('userXP').textContent = me ? me.xp : 0;
                     }
-                    console.log('✅ Leaderboard updated:', leaderboard.length, 'players');
+                } else {
+                    // 无数据
+                    if (wallet.connected) {
+                        document.getElementById('userXP').textContent = '0';
+                        document.getElementById('userRank').textContent = '-';
+                    }
                 }
             } catch (err) {
                 console.error('Fetch leaderboard error:', err);
+                if (wallet.connected) {
+                    document.getElementById('userXP').textContent = '0';
+                    document.getElementById('userRank').textContent = '-';
+                }
             }
         }
 
-        // 从链上获取游戏历史
+        // 
         async function fetchHistory() {
             try {
                 const data = await readContract('get_history', [10]);
@@ -769,21 +999,21 @@
             }
         }
 
-        // ========== 状态轮询 - 每3秒检查合约状态 ==========
+        // ==========  - 3 ==========
         function startPolling() {
             stopPolling();
-            console.log('📡 开始轮询合约状态...');
+            console.log(' ...');
             
             game.pollingInterval = setInterval(async () => {
                 try {
-                    // 从链上获取完整房间状态
-                    const status = await readContract('get_game_status', []);
-                    console.log('📊 链上房间:', status);
+                    // 
+                    const status = await readContract('get', []);
+                    console.log(' :', status);
                     
                     if (status && status.addresses) {
                         const chainCount = status.addresses.length;
                         
-                        // 同步链上玩家到本地（只添加新的，不覆盖AI）
+                        // AI
                         for (let i = 0; i < chainCount; i++) {
                             const addr = status.addresses[i];
                             const word = status.words[i];
@@ -799,17 +1029,18 @@
                                     ai: false,
                                     fullAddr: addr
                                 });
-                                toast('👤 新玩家加入!', 'bg-cyan-600');
+                                toast(' !', 'bg-cyan-600');
                             }
                         }
                         
                         renderRoom();
-                        document.getElementById('playersNeeded').textContent = 5 - game.players.length;
-                        document.getElementById('waitingCount').textContent = 5 - game.players.length;
+                        const currentNeeded = Math.max(0, GAME_CONFIG.minPlayers - game.players.length);
+                        document.getElementById('playersNeeded').textContent = currentNeeded > 0 ? currentNeeded : 'Ready';
+                        document.getElementById('waitingCount').textContent = currentNeeded > 0 ? currentNeeded : 'Ready';
                         
-                        // 如果链上人数变回0，说明已结算
+                        // 0
                         if (chainCount === 0 && game.state === 'submitted') {
-                            console.log('🎉 游戏已结算!');
+                            console.log(' !');
                             stopPolling();
                             stopCountdown();
                             stopAITimeout();
@@ -817,23 +1048,23 @@
                             await fetchLeaderboard();
                             await fetchHistory();
                             
-                            toast('🎉 游戏已结算！查看排行榜', 'bg-green-600');
+                            toast(' ', 'bg-green-600');
                             switchPage('leaderboard');
                             startNewRound();
                         }
                         
-                        // 如果链上满5人，显示结算中
-                        if (chainCount >= 5 && game.state === 'submitted') {
-                            console.log('🧠 房间已满，AI分析中...');
+                        // 房间满员
+                        if (chainCount >= GAME_CONFIG.maxPlayers && game.state === 'submitted') {
+                            console.log('Room full, starting game...');
                             stopPolling();
                             stopCountdown();
                             stopAITimeout();
                             showState('settling');
-                            toast('🧠 5人已满，AI正在分析...', 'bg-violet-600');
+                            toast('🎮 Room full! Starting game...', 'bg-orange-500');
                         }
                     }
                 } catch (err) {
-                    console.error('轮询错误:', err);
+                    console.error(':', err);
                 }
             }, 3000);
         }
@@ -845,26 +1076,30 @@
             }
         }
 
-        // ========== 30秒AI自动补位 ==========
+        // ========== AI补位系统 ==========
         function startAITimeout() {
             stopAITimeout();
-            console.log('⏰ 启动30秒AI补位倒计时...');
+            const aiDelay = GAME_CONFIG.aiDelay * 1000; // 3分钟
+            console.log('AI timeout started: ' + GAME_CONFIG.aiDelay + 's');
             
             game.aiTimeout = setTimeout(() => {
                 if (game.state !== 'submitted') return;
                 
-                console.log('🤖 30秒超时，AI自动补位...');
-                toast('🤖 超时！AI正在补位...', 'bg-yellow-600');
+                console.log('Timeout reached, AI filling...');
+                toast('⏰ Time up! AI players joining...', 'bg-yellow-600');
                 
-                // 本地模拟AI补位
                 const fillAI = setInterval(() => {
-                    if (game.players.length >= 5 || game.state !== 'submitted') {
+                    if (game.players.length >= GAME_CONFIG.maxPlayers || game.state !== 'submitted') {
                         clearInterval(fillAI);
+                        // 至少2人就开始游戏
+                        if (game.players.length >= GAME_CONFIG.minPlayers) {
+                            checkGameStart();
+                        }
                         return;
                     }
                     addAI();
-                }, 1000);
-            }, 30000);
+                }, 1500);
+            }, aiDelay);
         }
 
         function stopAITimeout() {
@@ -876,22 +1111,25 @@
 
         function startCountdown() {
             game.lastTime = Date.now();
-            game.countdown = 30;
+            game.roomStartTime = Date.now();
+            game.countdown = GAME_CONFIG.roomDuration; // 5分钟
             updateCountdown();
             
             if (game.interval) clearInterval(game.interval);
             game.interval = setInterval(() => {
-                if (game.players.length >= 5 || game.state === 'settling' || game.state === 'result') {
+                if (game.state === 'settling' || game.state === 'result') {
                     stopCountdown();
                     return;
                 }
                 const elapsed = Math.floor((Date.now() - game.lastTime) / 1000);
-                game.countdown = Math.max(0, 30 - elapsed);
+                game.countdown = Math.max(0, GAME_CONFIG.roomDuration - elapsed);
                 updateCountdown();
-                if (game.countdown <= 0) {
-                    addAI();
+                
+                // 房间时间到，自动结算
+                if (game.countdown <= 0 && game.players.length >= GAME_CONFIG.minPlayers) {
+                    checkGameStart();
                     game.lastTime = Date.now();
-                    game.countdown = 10;
+                    game.countdown = 15;
                 }
             }, 1000);
         }
@@ -903,142 +1141,297 @@
         }
 
         function updateCountdown() {
-            const show = game.countdown !== null && game.players.length > 0 && game.players.length < 5;
+            const show = game.countdown !== null && game.players.length > 0 && game.players.length < GAME_CONFIG.maxPlayers;
             document.getElementById('countdownBadge').classList.toggle('hidden', !show);
-            document.getElementById('countdownNum').textContent = game.countdown || 30;
-            document.getElementById('countdownText').classList.toggle('hidden', !show || game.state !== 'submitted');
-            document.getElementById('countdownNum2').textContent = game.countdown || 30;
-            document.getElementById('roomCountdown').classList.toggle('hidden', !show);
-            document.getElementById('roomCountdown').textContent = '🤖 ' + (game.countdown || 30) + 's 后AI补位';
             
-            // 更新等待人数显示
+            // 格式化时间显示
+            const mins = Math.floor((game.countdown || 0) / 60);
+            const secs = (game.countdown || 0) % 60;
+            const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+            
+            document.getElementById('countdownNum').textContent = timeStr;
+            document.getElementById('countdownText').classList.toggle('hidden', !show || game.state !== 'submitted');
+            document.getElementById('countdownNum2').textContent = timeStr;
+            document.getElementById('roomCountdown').classList.toggle('hidden', !show);
+            document.getElementById('roomCountdown').textContent = '⏱️ ' + timeStr;
+            
+            // 更新等待人数
             const waitingEl = document.getElementById('waitingCount');
             if (waitingEl) {
-                waitingEl.textContent = 5 - game.players.length;
+                const needed = Math.max(0, GAME_CONFIG.minPlayers - game.players.length);
+                waitingEl.textContent = needed > 0 ? needed : 'Ready!';
+            }
+        }
+        
+        function checkGameStart() {
+            if (game.players.length >= GAME_CONFIG.minPlayers && !isSettling && game.state !== 'settling' && game.state !== 'result') {
+                isSettling = true;
+                if (globalPollingInterval) {
+                    clearInterval(globalPollingInterval);
+                    globalPollingInterval = null;
+                }
+                toast('🎮 Game starting with ' + game.players.length + ' players!', 'bg-green-600');
+                setTimeout(() => settle(), 2000);
             }
         }
 
         function addAI() {
-            if (game.players.length >= 5) return;
+            if (game.players.length >= GAME_CONFIG.maxPlayers) return;
             if (game.txPending) return;
             
             const usedNames = game.players.filter(p => p.ai).map(p => p.addr);
             const name = AI_NAMES.find(n => !usedNames.includes(n)) || 'Bot-X';
             const usedWords = game.players.map(p => p.word);
-            const word = AI_WORDS.find(w => !usedWords.includes(w)) || 'chain';
+            const word = AI_WORDS.find(w => !usedWords.includes(w)) || game.theme.keywords[0];
             
-            // 本地模拟AI加入（不上链）
+            // AI
             game.players.push({ addr: name, word: word, ai: true });
             renderRoom();
-            toast('🤖 ' + name + ' 加入了', 'bg-violet-600');
+            toast(' ' + name + ' ', 'bg-orange-500');
             checkFull();
         }
 
         function checkFull() {
-            document.getElementById('playersNeeded').textContent = 5 - game.players.length;
-            document.getElementById('waitingCount').textContent = 5 - game.players.length;
-            if (game.players.length >= 5) {
+            const currentNeeded = Math.max(0, GAME_CONFIG.minPlayers - game.players.length);
+            document.getElementById('playersNeeded').textContent = currentNeeded > 0 ? currentNeeded : 'Ready';
+            document.getElementById('waitingCount').textContent = currentNeeded > 0 ? currentNeeded : 'Ready';
+            
+            // 至少minPlayers人或达到maxPlayers就开始
+            if ((game.players.length >= GAME_CONFIG.maxPlayers || 
+                (game.players.length >= GAME_CONFIG.minPlayers && game.countdown <= 0)) && 
+                !isSettling && game.state !== 'settling' && game.state !== 'result') {
+                isSettling = true;
                 stopCountdown();
                 settle();
             }
         }
 
         function settle() {
+            // 立即停止所有定时器，防止重复调用
+            stopPolling();
+            stopCountdown();
+            stopAITimeout();
+            if (globalPollingInterval) {
+                clearInterval(globalPollingInterval);
+                globalPollingInterval = null;
+            }
+            
+            game.state = 'settling';
             showState('settling');
+            
             setTimeout(() => {
-                const shuffled = [...game.players].sort(() => Math.random() - 0.5);
-                const winners = shuffled.slice(0, Math.random() > 0.5 ? 2 : 1);
-                const result = game.players.map(p => ({
-                    ...p,
-                    win: winners.some(w => w.addr === p.addr),
-                    xp: winners.some(w => w.addr === p.addr) ? 50 : 10
-                }));
+                // 计算词语相似度得分（简单版本：相同词加分）
+                const wordCounts = {};
+                game.players.forEach(p => {
+                    wordCounts[p.word] = (wordCounts[p.word] || 0) + 1;
+                });
+                
+                // 找出匹配的词（出现次数>1）
+                const matchedWords = Object.keys(wordCounts).filter(w => wordCounts[w] > 1);
+                
+                // 计算每个玩家的得分
+                const result = game.players.map(p => {
+                    const isMatched = matchedWords.includes(p.word);
+                    const matchCount = wordCounts[p.word] || 1;
+                    let xp = GAME_CONFIG.xpParticipant; // 基础参与奖励
+                    
+                    if (isMatched) {
+                        xp += GAME_CONFIG.xpBonus * (matchCount - 1); // 匹配奖励
+                    }
+                    
+                    return {
+                        ...p,
+                        win: isMatched,
+                        matchCount: matchCount,
+                        xp: xp
+                    };
+                });
+                
+                // 找出得分最高的作为冠军
+                const maxXP = Math.max(...result.map(r => r.xp));
+                result.forEach(r => {
+                    if (r.xp === maxXP && r.xp > GAME_CONFIG.xpParticipant) {
+                        r.champion = true;
+                        r.xp += GAME_CONFIG.xpWinner - GAME_CONFIG.xpBonus; // 额外冠军奖励
+                    }
+                });
 
                 history.unshift({
                     id: history.length + 1,
-                    theme: 'blockchain',
-                    winners: winners.map(w => w.addr),
-                    words: game.players.map(p => p.word)
+                    theme: game.theme.name,
+                    winners: result.filter(r => r.win).map(w => w.addr),
+                    words: game.players.map(p => p.word),
+                    matchedWords: matchedWords
                 });
+                saveHistory();
                 renderHistory();
 
-                const userWon = winners.some(w => w.addr === wallet.short);
-                document.getElementById('resultTitle').textContent = userWon ? '🎉 你赢了!' : '👏 游戏结束!';
-                document.getElementById('resultTheme').textContent = 'blockchain technology';
-                document.getElementById('resultList').innerHTML = result.map(p => `
-                    <div class="flex items-center justify-between p-3 rounded-lg ${p.win ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-[#252538]/50'}">
+                // 更新排行榜 - 包含玩家和AI
+                result.forEach(p => {
+                    const existingIdx = leaderboard.findIndex(l => l.addr === p.addr || (l.fullAddr && p.fullAddr && l.fullAddr.toLowerCase() === p.fullAddr.toLowerCase()));
+                    if (existingIdx >= 0) {
+                        leaderboard[existingIdx].xp += p.xp;
+                    } else {
+                        leaderboard.push({
+                            addr: p.addr,
+                            fullAddr: p.fullAddr || p.addr,
+                            xp: p.xp,
+                            ai: p.ai || false
+                        });
+                    }
+                });
+                
+                // 排序并保存
+                leaderboard.sort((a, b) => b.xp - a.xp);
+                saveLeaderboard();
+                renderLeaderboard();
+
+                const userResult = result.find(r => r.addr === wallet.short || (r.fullAddr && r.fullAddr.toLowerCase() === wallet.address?.toLowerCase()));
+                const userWon = userResult && userResult.win;
+                document.getElementById('resultTitle').textContent = userWon ? '🎉 Words Matched!' : '🏁 Game Over!';
+                document.getElementById('resultTheme').textContent = game.theme.name + (matchedWords.length > 0 ? ' | Matched: ' + matchedWords.join(', ') : '');
+                document.getElementById('resultList').innerHTML = result.map(p => {
+                    const isMe = p.addr === wallet.short || (p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase());
+                    return `
+                    <div class="flex items-center justify-between p-3 rounded-lg ${p.champion ? 'bg-yellow-500/10 border border-yellow-500/30' : p.win ? 'bg-green-500/10 border border-green-500/30' : 'bg-white/5'}">
                         <div class="flex items-center gap-2">
-                            ${p.ai ? '🤖' : ''}<span class="${p.addr === wallet.short ? 'text-cyan-400' : ''}">${p.addr === wallet.short ? 'You' : p.addr}</span>
+                            <span class="text-lg">${p.champion ? '🏆' : p.win ? '✨' : '👤'}</span>
+                            <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
+                            ${p.ai ? '<span class="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
                             <span class="text-xs text-gray-500">"${p.word}"</span>
+                            ${p.matchCount > 1 ? `<span class="px-1.5 py-0.5 text-xs rounded bg-green-500/20 text-green-400">×${p.matchCount}</span>` : ''}
                         </div>
-                        <span class="font-bold ${p.win ? 'text-yellow-400' : 'text-gray-400'}">${p.win ? '🏆 ' : ''}+${p.xp} XP</span>
+                        <span class="font-bold ${p.champion ? 'text-yellow-400' : p.win ? 'text-green-400' : 'text-gray-400'}">+${p.xp} XP</span>
                     </div>
-                `).join('');
+                `}).join('');
 
-                const me = result.find(p => p.addr === wallet.short);
-                if (me) {
-                    const cur = parseInt(document.getElementById('userXP').textContent) || 0;
-                    document.getElementById('userXP').textContent = cur + me.xp;
-                }
-
+                game.state = 'result';
                 showState('result');
-                toast('🎉 结算完成!', 'bg-green-600');
+                
+                // 更新房间状态区域显示游戏结束
+                document.getElementById('roomListContent').innerHTML = `
+                    <div class="p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-center">
+                        <div class="text-3xl mb-2">🏁</div>
+                        <p class="text-green-400 font-bold mb-1">Game Complete!</p>
+                        <p class="text-gray-400 text-sm">Click "Play Again" to start a new game</p>
+                    </div>
+                `;
+                
+                toast(userWon ? '🎉 You won +50 XP!' : '🏁 Game complete +10 XP', userWon ? 'bg-yellow-600' : 'bg-green-600');
+                updateHeaderXP();
             }, 3000);
         }
 
         function startNewRound() {
-            // 清理所有定时器
             stopPolling();
             stopCountdown();
             stopAITimeout();
             
+            isSettling = false;
             game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
+            
+            // 清空房间状态
+            localStorage.removeItem('genlayer_room');
+            
+            // 重置按钮
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = false;
+            submitBtn.textContent = '🚀 Submit Word';
+            document.getElementById('wordInput').disabled = false;
+            
             showState('input');
             renderRoom();
-            document.getElementById('playersNeeded').textContent = '5';
+            
+            // 重新启动房间列表轮询
+            startRoomListPolling();
+            
+            document.getElementById('playersNeeded').textContent = '4';
+            document.getElementById('waitingCount').textContent = '4';
         }
 
         // ========== RENDER ==========
         function renderRoom() {
             const n = game.players.length;
-            document.getElementById('roomBadge').textContent = n + '/5';
-            document.getElementById('roomBadge').className = 'px-2 py-0.5 text-xs rounded-full ' + (n >= 5 ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400');
-            document.getElementById('roomProgress').style.width = (n / 5 * 100) + '%';
+            const max = GAME_CONFIG.maxPlayers;
+            document.getElementById('roomBadge').textContent = n + '/' + max;
+            document.getElementById('roomBadge').className = 'px-2 py-0.5 text-xs rounded-full ' + (n >= GAME_CONFIG.minPlayers ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400');
+            document.getElementById('roomProgress').style.width = (n / max * 100) + '%';
 
             let html = game.players.map(p => {
                 const isMe = p.addr === wallet.short;
-                const cls = p.ai ? 'border-cyan-500/30 bg-cyan-500/10' : isMe ? 'border-green-500/30 bg-green-500/10' : 'border-violet-500/30 bg-violet-500/10';
-                return `<span class="px-3 py-1.5 rounded-full border text-xs ${cls}">${p.ai ? '🤖 ' : ''}${isMe ? 'You' : p.addr}: <span class="text-violet-400">${p.word}</span></span>`;
+                const cls = p.ai ? 'border-blue-400/30 bg-blue-400/10' : isMe ? 'border-green-500/30 bg-green-500/10' : 'border-orange-500/30 bg-orange-500/10';
+                return `<span class="px-3 py-1.5 rounded-full border text-xs ${cls}">${p.ai ? '🤖 ' : ''}${isMe ? 'You' : p.addr}: <span class="text-orange-400">${p.word}</span></span>`;
             }).join('');
 
-            for (let i = n; i < 5; i++) {
-                html += '<span class="px-3 py-1.5 rounded-full border border-dashed border-[#2a2a3e] text-xs text-gray-500">Empty</span>';
+            // 只显示几个空位
+            const emptySlots = Math.min(3, max - n);
+            for (let i = 0; i < emptySlots; i++) {
+                html += '<span class="px-3 py-1.5 rounded-full border border-dashed border-[#1a1a1a] text-xs text-gray-500">Empty</span>';
+            }
+            if (max - n > 3) {
+                html += `<span class="px-3 py-1.5 text-xs text-gray-500">+${max - n - 3} more</span>`;
             }
             document.getElementById('playerSlots').innerHTML = html;
         }
 
         function renderLeaderboard() {
             const emojis = ['🥇', '🥈', '🥉'];
-            document.getElementById('leaderboardList').innerHTML = leaderboard.map((p, i) => `
-                <div class="flex items-center justify-between p-4 rounded-xl bg-[#1e1e2f]">
-                    <div class="flex items-center gap-4">
-                        <span class="text-xl w-10 text-center">${emojis[i] || '#' + (i + 1)}</span>
-                        <span>${p.addr}</span>
+            const top30 = leaderboard.slice(0, 30);
+            
+            if (top30.length === 0) {
+                document.getElementById('leaderboardList').innerHTML = `
+                    <div class="text-center p-8 text-gray-500">
+                        <div class="text-4xl mb-2">🏆</div>
+                        <p>No rankings yet</p>
+                        <p class="text-xs mt-1">Play a game to get on the leaderboard!</p>
                     </div>
-                    <span class="font-bold gradient-text">${p.xp} XP</span>
+                `;
+                return;
+            }
+            
+            document.getElementById('leaderboardList').innerHTML = top30.map((p, i) => {
+                const isMe = wallet.connected && p.fullAddr?.toLowerCase() === wallet.address?.toLowerCase();
+                const isAI = p.addr.startsWith('Bot-') || p.ai;
+                return `
+                <div class="flex items-center justify-between p-3 rounded-xl ${isMe ? 'bg-orange-500/20 border border-orange-500/30' : 'bg-white/5'} ${i < 3 ? 'mb-1' : ''}">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl w-8 text-center">${emojis[i] || '#' + (i + 1)}</span>
+                        <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
+                        ${isAI ? '<span class="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
+                    </div>
+                    <span class="font-bold ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-orange-400' : 'gradient-text'}">${p.xp} XP</span>
                 </div>
-            `).join('');
+            `}).join('');
+            
+            // 更新header XP
+            updateHeaderXP();
+        }
+        
+        function updateHeaderXP() {
+            if (!wallet.connected) return;
+            
+            const myEntry = leaderboard.find(p => p.fullAddr?.toLowerCase() === wallet.address?.toLowerCase());
+            const xp = myEntry ? myEntry.xp : 0;
+            
+            document.getElementById('headerXP').classList.remove('hidden');
+            document.getElementById('headerXP').classList.add('flex');
+            document.getElementById('headerXPValue').textContent = xp + ' XP';
+            document.getElementById('userXP').textContent = xp;
+            
+            // 找到排名
+            const rank = leaderboard.findIndex(p => p.fullAddr?.toLowerCase() === wallet.address?.toLowerCase());
+            document.getElementById('userRank').textContent = rank >= 0 ? '#' + (rank + 1) : '-';
         }
 
         function renderHistory() {
             document.getElementById('historyList').innerHTML = history.map(g => `
-                <div class="bg-[#1e1e2f] rounded-xl p-5">
+                <div class="bg-[#111111] rounded-xl p-5">
                     <div class="flex justify-between mb-3">
-                        <span class="font-bold">🎮 Game #${g.id}</span>
-                        <span class="text-xs text-yellow-400">🏆 ${g.winners.join(', ')}</span>
+                        <span class="font-bold">Game Game #${g.id}</span>
+                        <span class="text-xs text-yellow-400">Rank ${g.winners.join(', ')}</span>
                     </div>
-                    <div class="text-xs text-gray-400 mb-3">Theme: <span class="text-cyan-400">${g.theme}</span></div>
-                    <div class="flex flex-wrap gap-2">${g.words.map(w => `<span class="px-2 py-1 rounded bg-[#252538] text-xs">${w}</span>`).join('')}</div>
+                    <div class="text-xs text-gray-400 mb-3">Theme: <span class="text-orange-300">${g.theme}</span></div>
+                    <div class="flex flex-wrap gap-2">${g.words.map(w => `<span class="px-2 py-1 rounded bg-[#151515] text-xs">${w}</span>`).join('')}</div>
                 </div>
             `).join('');
         }
