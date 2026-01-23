@@ -263,8 +263,7 @@
             lastTime: Date.now(), 
             txPending: false, 
             pollingInterval: null, 
-            aiTimeout: null,
-            roomCreatedTime: null  // 房间创建时间
+            aiTimeout: null
         };
         const AI_WORDS = ['node','chain','block','token','gas','hash','mint','swap','stake','vote','dao','nft'];
         // AI使用虚拟地址格式
@@ -276,17 +275,9 @@
             '0x6e9C...1a34'
         ];
         
-        // 从localStorage加载数据
-        let history = JSON.parse(localStorage.getItem('genlayer_history')) || [];
-        let leaderboard = JSON.parse(localStorage.getItem('genlayer_leaderboard')) || [];
-        
-        // 保存到localStorage的函数
-        function saveLeaderboard() {
-            localStorage.setItem('genlayer_leaderboard', JSON.stringify(leaderboard));
-        }
-        function saveHistory() {
-            localStorage.setItem('genlayer_history', JSON.stringify(history));
-        }
+        // 排行榜和历史完全从链上读取
+        let history = [];
+        let leaderboard = [];
         
         // ========== ROOM SYSTEM ==========
         let currentRoomId = null;
@@ -301,6 +292,14 @@
         renderHistory();
         checkWalletConnection();
         startRoomListPolling();
+        
+        // 立即从链上获取排行榜
+        fetchLeaderboard();
+        
+        // 定期刷新排行榜（每30秒）
+        setInterval(() => {
+            fetchLeaderboard();
+        }, 30000);
 
         // ========== ROOM MANAGEMENT ==========
         function startRoomListPolling() {
@@ -317,147 +316,204 @@
 
         let isSettling = false;
         
-        // 房间时间追踪（使用localStorage保持跨会话）
-        function getRoomCreatedTime() {
-            const saved = localStorage.getItem('genlayer_room_created');
-            return saved ? parseInt(saved) : null;
-        }
-        
-        function setRoomCreatedTime(time) {
-            localStorage.setItem('genlayer_room_created', time.toString());
-        }
-        
-        function clearRoomCreatedTime() {
-            localStorage.removeItem('genlayer_room_created');
-        }
-        
         async function refreshRoomList() {
             // 如果正在结算或已结算，跳过刷新
             if (isSettling || game.state === 'settling' || game.state === 'result') return;
             
             // 从链上读取房间状态
             const status = await readContract('get_game_status', []);
-            console.log('Chain room status:', status);
+            console.log('[Room] Raw status:', status, typeof status);
             
             const container = document.getElementById('roomListContent');
             
-            // 合约返回 "word1,word2,word3" 格式
-            let chainWords = [];
-            if (status && typeof status === 'string' && status.trim() !== '') {
-                chainWords = status.split(',').map(w => w.trim()).filter(w => w);
+            // 解析房间数据
+            let roomData = null;
+            
+            // 情况1: 已经是对象
+            if (status && typeof status === 'object') {
+                roomData = status;
             }
-            
-            // 检查房间状态变化
-            const previousCount = game.players.length;
-            
-            // 如果用户已提交词语，不覆盖game.players
-            if (game.state !== 'submitted' && game.state !== 'settling') {
-                game.players = chainWords.map((w, i) => ({
-                    addr: '0x' + Math.random().toString(16).slice(2, 6) + '...' + Math.random().toString(16).slice(2, 6),
-                    word: w,
-                    ai: false
-                }));
-            }
-            
-            // 追踪房间创建时间
-            if (chainWords.length > 0 && previousCount === 0) {
-                // 房间刚创建
-                if (!getRoomCreatedTime()) {
-                    setRoomCreatedTime(Date.now());
+            // 情况2: 是JSON字符串
+            else if (status && typeof status === 'string') {
+                try {
+                    roomData = JSON.parse(status);
+                } catch (e) {
+                    console.log('[Room] JSON parse failed:', e);
                 }
-            } else if (chainWords.length === 0) {
-                // 房间已结束/清空
-                clearRoomCreatedTime();
             }
             
-            // 计算当前玩家数和需要的人数
+            console.log('[Room] Parsed roomData:', roomData);
+            
+            // 构建玩家列表
+            let chainPlayers = [];
+            if (roomData && roomData.addresses && roomData.words && roomData.addresses.length > 0) {
+                for (let i = 0; i < roomData.addresses.length; i++) {
+                    const addr = roomData.addresses[i];
+                    const word = roomData.words[i];
+                    if (!addr || !word) continue;
+                    
+                    const isMe = wallet.connected && addr.toLowerCase() === wallet.address?.toLowerCase();
+                    chainPlayers.push({
+                        addr: isMe ? wallet.short : (addr.slice(0, 6) + '...' + addr.slice(-4)),
+                        fullAddr: addr,
+                        word: word,
+                        ai: false
+                    });
+                    
+                    // 如果是自己且状态还是input，自动切换到submitted
+                    if (isMe && game.state === 'input') {
+                        game.word = word;
+                        game.state = 'submitted';
+                        showState('submitted');
+                        document.getElementById('submittedWordText').textContent = word;
+                    }
+                }
+            }
+            
+            console.log('[Room] Players found:', chainPlayers.length, chainPlayers);
+            
+            // 更新游戏玩家列表
+            game.players = chainPlayers;
+            
+            // 计算人数
             const playerCount = game.players.length;
             const needed = Math.max(0, 5 - playerCount);
             
-            // 检查房间是否超过1分钟（60秒）
-            const roomCreatedTime = getRoomCreatedTime();
-            const roomAge = roomCreatedTime ? Math.floor((Date.now() - roomCreatedTime) / 1000) : 0;
-            const canJoin = roomAge < 60; // 1分钟内可以加入
-            const timeLeft = Math.max(0, 60 - roomAge);
+            // 更新UI人数显示
+            const playersNeededEl = document.getElementById('playersNeeded');
+            const waitingCountEl = document.getElementById('waitingCount');
+            if (playersNeededEl) playersNeededEl.textContent = needed;
+            if (waitingCountEl) waitingCountEl.textContent = needed;
             
-            // 更新人数显示
-            document.getElementById('playersNeeded').textContent = needed;
-            document.getElementById('waitingCount').textContent = needed;
-            
+            // 渲染房间状态
             if (playerCount > 0) {
-                // 根据是否超时显示不同的UI
-                let joinButton = '';
-                if (needed > 0 && !game.word) {
-                    if (canJoin) {
-                        joinButton = `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now (${timeLeft}s)</button>`;
-                    } else {
-                        joinButton = `<span class="px-3 py-1 rounded-full bg-gray-500/20 text-gray-400 text-sm">Closed</span>`;
-                    }
+                // 有玩家在房间中
+                const meInRoom = wallet.connected && game.players.some(p => 
+                    p.fullAddr?.toLowerCase() === wallet.address?.toLowerCase()
+                );
+                
+                // 显示加入按钮条件：房间未满 + 自己不在房间 + 已连接钱包
+                let actionButton = '';
+                if (needed > 0 && !meInRoom && wallet.connected) {
+                    actionButton = `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">🎮 Join Game</button>`;
+                } else if (needed > 0 && !wallet.connected) {
+                    actionButton = `<button onclick="handleWalletClick()" class="px-4 py-2 text-sm rounded-lg bg-gray-600 text-white font-medium">Connect to Join</button>`;
+                } else if (needed <= 0) {
+                    actionButton = `<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-medium">Full - Starting!</span>`;
+                } else if (meInRoom) {
+                    actionButton = `<span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm font-medium">You're in!</span>`;
                 }
                 
                 container.innerHTML = `
                     <div class="p-4 rounded-lg bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/30">
-                        <div class="flex items-center justify-between mb-3">
-                            <div class="flex items-center gap-2">
-                                <span class="text-2xl">🎮</span>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <span class="text-3xl">🎮</span>
                                 <div>
-                                    <div class="text-white font-bold">${playerCount}/5 Players</div>
-                                    <div class="text-xs text-gray-400">
-                                        ${needed > 0 ? (canJoin ? `Join within ${timeLeft}s` : 'AI filling room...') : 'Game starting!'}
+                                    <div class="text-white font-bold text-lg">${playerCount}/5 Players</div>
+                                    <div class="text-sm text-gray-400">
+                                        ${needed > 0 ? `Waiting for ${needed} more player${needed > 1 ? 's' : ''}...` : 'Room is full!'}
                                     </div>
                                 </div>
                             </div>
-                            ${joinButton}
-                            ${needed <= 0 ? '<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Full</span>' : ''}
+                            ${actionButton}
                         </div>
                         <div class="space-y-2">
-                            ${game.players.map((p, i) => `
-                                <div class="flex items-center justify-between p-2 rounded bg-white/5">
-                                    <div class="flex items-center gap-2">
-                                        <span class="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center text-sm">👤</span>
-                                        <span class="text-gray-300">${p.addr}</span>
+                            ${game.players.map((p, i) => {
+                                const isMe = wallet.connected && p.fullAddr?.toLowerCase() === wallet.address?.toLowerCase();
+                                return `
+                                <div class="flex items-center justify-between p-3 rounded-lg ${isMe ? 'bg-orange-500/20 border border-orange-500/30' : 'bg-white/5'}">
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-8 h-8 rounded-full ${isMe ? 'bg-orange-500/30' : 'bg-gray-700'} flex items-center justify-center text-sm">
+                                            ${isMe ? '👤' : '🎮'}
+                                        </span>
+                                        <div>
+                                            <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
+                                            ${isMe ? '<span class="ml-2 text-xs text-orange-400/70">(your submission)</span>' : ''}
+                                        </div>
                                     </div>
-                                    <span class="px-2 py-1 rounded bg-green-500/20 text-green-400 text-xs">${p.word}</span>
+                                    <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-medium">${p.word}</span>
                                 </div>
-                            `).join('')}
-                            ${Array(Math.min(needed, 3)).fill(0).map((_, i) => `
-                                <div class="flex items-center justify-between p-2 rounded bg-white/5 border border-dashed border-gray-700">
-                                    <div class="flex items-center gap-2">
-                                        <span class="w-8 h-8 rounded-full bg-gray-700/50 flex items-center justify-center text-sm">❓</span>
-                                        <span class="text-gray-500">Waiting...</span>
+                            `}).join('')}
+                            ${needed > 0 ? Array(Math.min(needed, 4)).fill(0).map((_, i) => `
+                                <div class="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-dashed border-gray-700">
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-sm text-gray-500">?</span>
+                                        <span class="text-gray-500">Waiting for player...</span>
                                     </div>
-                                    <span class="px-2 py-1 rounded bg-gray-700/50 text-gray-500 text-xs">Empty</span>
+                                    <span class="px-3 py-1 rounded-full bg-gray-800 text-gray-500 text-xs">Empty</span>
                                 </div>
-                            `).join('')}
+                            `).join('') : ''}
                         </div>
                     </div>
                 `;
                 
                 renderRoom();
                 
-                // 检查是否满5人
+                // 检查是否满5人 - 合约会自动结算，前端显示结果
                 if (playerCount >= 5 && !isSettling && game.state !== 'settling' && game.state !== 'result') {
                     isSettling = true;
-                    clearRoomCreatedTime();
-                    // 立即停止轮询防止重复触发
                     if (globalPollingInterval) {
                         clearInterval(globalPollingInterval);
                         globalPollingInterval = null;
                     }
-                    toast('Game starting!', 'bg-green-600');
-                    setTimeout(() => settle(), 2000);
+                    toast('🎉 Room full! Game settling...', 'bg-green-600');
+                    setTimeout(async () => {
+                        await fetchLeaderboard();
+                        showGameResult();
+                    }, 3000);
                 }
                 
             } else {
-                clearRoomCreatedTime();
-                container.innerHTML = `
-                    <div class="p-4 rounded-lg bg-white/5 text-center">
-                        <div class="text-3xl mb-2">🎯</div>
-                        <p class="text-gray-300 mb-1">No active room</p>
-                        <p class="text-gray-500 text-sm">Be the first to start a game!</p>
-                    </div>
-                `;
+                // 房间为空
+                if (game.state === 'submitted' && game.word) {
+                    // 之前提交过，现在房间空了 = 游戏已结算
+                    toast('🏁 Game settled!', 'bg-green-600');
+                    await fetchLeaderboard();
+                    showGameResult();
+                } else {
+                    // 真的没有房间
+                    container.innerHTML = `
+                        <div class="p-6 rounded-lg bg-white/5 text-center">
+                            <div class="text-4xl mb-3">🎯</div>
+                            <p class="text-gray-300 font-medium mb-2">No active game room</p>
+                            <p class="text-gray-500 text-sm mb-4">Be the first to start a new game!</p>
+                            ${wallet.connected ? 
+                                `<p class="text-orange-400 text-sm">👆 Enter a word above and click Submit</p>` : 
+                                `<button onclick="handleWalletClick()" class="px-4 py-2 rounded-lg btn-primary text-white text-sm font-medium">Connect Wallet to Play</button>`
+                            }
+                        </div>
+                    `;
+                }
             }
+        }
+        
+        // 显示游戏结果（链上结算后）
+        function showGameResult() {
+            isSettling = false;
+            
+            // 显示结果
+            document.getElementById('resultTitle').textContent = '🏁 Game Settled!';
+            document.getElementById('resultTheme').textContent = 'Check leaderboard for results';
+            document.getElementById('resultList').innerHTML = `
+                <div class="text-center p-4">
+                    <p class="text-gray-400">Game has been settled on-chain.</p>
+                    <p class="text-orange-400 mt-2">Check the Ranks tab for updated scores!</p>
+                </div>
+            `;
+            
+            game.state = 'result';
+            showState('result');
+            
+            document.getElementById('roomListContent').innerHTML = `
+                <div class="p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-center">
+                    <div class="text-3xl mb-2">🏁</div>
+                    <p class="text-green-400 font-bold mb-1">Game Complete!</p>
+                    <p class="text-gray-400 text-sm">Click "Play Again" to start a new game</p>
+                </div>
+            `;
+            
+            updateHeaderXP();
         }
 
         function joinChainRoom() {
@@ -496,9 +552,12 @@
             document.getElementById('liveRoomBadge').textContent = playerCount + '/5';
         }
 
-        // 监听 localStorage 变化（备用同步）
-        window.addEventListener('storage', (e) => {
-            refreshRoomList();
+        // 监听页面可见性变化时刷新数据
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                refreshRoomList();
+                fetchLeaderboard();
+            }
         });
 
         // ========== WALLET ==========
@@ -764,8 +823,8 @@
             toast('Sending to chain...', 'bg-orange-500');
 
             try {
-                // 发送到链上
-                const txResult = await callContract('add', [w]);
+                // 发送到链上 - 调用合约的 submit_word 方法
+                const txResult = await callContract('submit_word', [w]);
                 
                 if (txResult.success && txResult.hash) {
                     game.word = w;
@@ -896,14 +955,12 @@
                                    !window.location.hostname.includes('192.168.');
                 const rpcEndpoint = isDeployed ? '/api/rpc' : 'https://studio.genlayer.com/api';
                 
-                console.log('Using RPC endpoint:', rpcEndpoint, 'isDeployed:', isDeployed);
-                
                 // 使用 msgpack 编码（GenLayer要求）
                 const calldata = { method: method, args: args };
                 const encoded = msgpack.encode(calldata);
                 const hexData = '0x' + Array.from(encoded).map(b => b.toString(16).padStart(2, '0')).join('');
                 
-                console.log('Calling contract:', { method, args, hexData });
+                console.log(`[RPC] Calling ${method}...`);
                 
                 const response = await fetch(rpcEndpoint, {
                     method: 'POST',
@@ -922,58 +979,79 @@
                 });
                 
                 const result = await response.json();
-                console.log('gen_call result:', JSON.stringify(result, null, 2));
                 
                 if (result.error) {
-                    console.error('RPC error:', JSON.stringify(result.error, null, 2));
+                    console.error(`[RPC] Error:`, result.error);
                     return null;
                 }
                 
-                if (result.result) {
-                    let data = result.result;
-                    
-                    // 如果是十六进制字符串，尝试 msgpack 解码
-                    if (typeof data === 'string' && data.startsWith('0x')) {
-                        try {
-                            const hex = data.slice(2);
-                            const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
-                            data = msgpack.decode(bytes);
-                            console.log('Msgpack decoded:', data);
-                        } catch (e) {
-                            console.log('Msgpack decode failed, trying as string:', e);
-                        }
-                    }
-                    
-                    // 如果是字符串，尝试 JSON 解析
-                    if (typeof data === 'string') {
-                        if (data.startsWith('"') && data.endsWith('"')) {
-                            data = data.slice(1, -1);
-                        }
-                        data = data.replace(/\\"/g, '"');
-                        if (data.includes('{')) {
-                            try {
-                                data = JSON.parse(data);
-                            } catch (e) {
-                                console.log('JSON parse failed:', e);
-                            }
-                        }
-                    }
-                    console.log('Parsed data:', data);
-                    return data;
+                if (!result.result) {
+                    console.log(`[RPC] No result`);
+                    return null;
                 }
-                return null;
+                
+                let data = result.result;
+                
+                // Step 1: 如果是十六进制字符串，msgpack解码
+                if (typeof data === 'string' && data.startsWith('0x')) {
+                    try {
+                        const hex = data.slice(2);
+                        const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+                        data = msgpack.decode(bytes);
+                        console.log(`[RPC] Msgpack decoded:`, typeof data, data);
+                    } catch (e) {
+                        console.log(`[RPC] Msgpack decode failed:`, e.message);
+                    }
+                }
+                
+                // Step 2: 如果仍是字符串，尝试JSON解析（合约返回JSON字符串）
+                if (typeof data === 'string') {
+                    // 去掉首尾引号
+                    if (data.startsWith('"') && data.endsWith('"')) {
+                        data = data.slice(1, -1);
+                    }
+                    // 处理转义
+                    data = data.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                    
+                    // 尝试JSON解析
+                    if (data.startsWith('{') || data.startsWith('[')) {
+                        try {
+                            data = JSON.parse(data);
+                            console.log(`[RPC] JSON parsed:`, data);
+                        } catch (e) {
+                            console.log(`[RPC] JSON parse failed:`, e.message);
+                        }
+                    }
+                }
+                
+                console.log(`[RPC] ${method} result:`, data);
+                return data;
+                
             } catch (err) {
-                console.error('Read contract error:', err);
+                console.error(`[RPC] ${method} error:`, err.message);
                 return null;
             }
         }
+            }
+        }
 
-        // 
+        // 从链上获取排行榜
         async function fetchLeaderboard() {
             try {
                 console.log('Fetching leaderboard from chain...');
-                const data = await readContract('get_leaderboard', []);
-                console.log('Leaderboard data:', data);
+                let data = await readContract('get_leaderboard', []);
+                console.log('Leaderboard raw data:', data, typeof data);
+                
+                // 如果是字符串，尝试解析为JSON
+                if (typeof data === 'string') {
+                    try {
+                        data = JSON.parse(data);
+                    } catch (e) {
+                        console.log('Leaderboard JSON parse failed:', e);
+                    }
+                }
+                
+                console.log('Leaderboard parsed data:', data);
                 
                 if (data && typeof data === 'object' && Object.keys(data).length > 0) {
                     leaderboard = Object.entries(data)
@@ -983,8 +1061,9 @@
                             xp: parseInt(xp) || 0 
                         }))
                         .sort((a, b) => b.xp - a.xp)
-                        .slice(0, 20);
+                        .slice(0, 30);
                     
+                    console.log('Leaderboard processed:', leaderboard);
                     renderLeaderboard();
                     
                     if (wallet.connected) {
@@ -999,7 +1078,9 @@
                         document.getElementById('userXP').textContent = me ? me.xp : 0;
                     }
                 } else {
-                    // 无数据
+                    console.log('No leaderboard data');
+                    leaderboard = [];
+                    renderLeaderboard();
                     if (wallet.connected) {
                         document.getElementById('userXP').textContent = '0';
                         document.getElementById('userRank').textContent = '-';
@@ -1014,17 +1095,10 @@
             }
         }
 
-        // 
+        // History暂时禁用（合约中没有get_history方法）
         async function fetchHistory() {
-            try {
-                const data = await readContract('get_history', [10]);
-                if (data && Array.isArray(data)) {
-                    history = data.reverse();
-                    renderHistory();
-                }
-            } catch (err) {
-                console.error('Fetch history error:', err);
-            }
+            // 合约中没有get_history方法，暂时跳过
+            console.log('History fetch skipped - not implemented in contract');
         }
 
         // ==========  - 3 ==========
@@ -1204,7 +1278,7 @@
             }
         }
 
-        function settle() {
+        async function settle() {
             // 立即停止所有定时器，防止重复调用
             stopPolling();
             stopCountdown();
@@ -1217,75 +1291,47 @@
             game.state = 'settling';
             showState('settling');
             
-            setTimeout(() => {
-                const shuffled = [...game.players].sort(() => Math.random() - 0.5);
-                const winners = shuffled.slice(0, Math.random() > 0.5 ? 2 : 1);
-                const result = game.players.map(p => ({
-                    ...p,
-                    win: winners.some(w => w.addr === p.addr),
-                    xp: winners.some(w => w.addr === p.addr) ? 50 : 10
-                }));
+            // 等待2秒显示结算动画
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // 合约逻辑：每个参与者+10分，没有winner
+            const result = game.players.map(p => ({
+                ...p,
+                xp: 10  // 合约给每个人+10
+            }));
 
-                history.unshift({
-                    id: history.length + 1,
-                    theme: 'blockchain',
-                    winners: winners.map(w => w.addr),
-                    words: game.players.map(p => p.word)
-                });
-                saveHistory();
-                renderHistory();
+            // 从链上刷新排行榜
+            await fetchLeaderboard();
 
-                // 更新排行榜 - 包含玩家和AI
-                result.forEach(p => {
-                    const existingIdx = leaderboard.findIndex(l => l.addr === p.addr || (l.fullAddr && p.fullAddr && l.fullAddr.toLowerCase() === p.fullAddr.toLowerCase()));
-                    if (existingIdx >= 0) {
-                        leaderboard[existingIdx].xp += p.xp;
-                    } else {
-                        leaderboard.push({
-                            addr: p.addr,
-                            fullAddr: p.fullAddr || p.addr,
-                            xp: p.xp,
-                            ai: p.ai || false
-                        });
-                    }
-                });
-                
-                // 排序并保存
-                leaderboard.sort((a, b) => b.xp - a.xp);
-                saveLeaderboard();
-                renderLeaderboard();
-
-                const userWon = winners.some(w => w.addr === wallet.short || (w.fullAddr && w.fullAddr.toLowerCase() === wallet.address?.toLowerCase()));
-                document.getElementById('resultTitle').textContent = userWon ? '🎉 You Won!' : '🏁 Game Over!';
-                document.getElementById('resultTheme').textContent = 'blockchain technology';
-                document.getElementById('resultList').innerHTML = result.map(p => {
-                    const isMe = p.addr === wallet.short || (p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase());
-                    return `
-                    <div class="flex items-center justify-between p-3 rounded-lg ${p.win ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-white/5'}">
-                        <div class="flex items-center gap-2">
-                            <span class="text-lg">${p.win ? '🏆' : '👤'}</span>
-                            <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
-                            <span class="text-xs text-gray-500">"${p.word}"</span>
-                        </div>
-                        <span class="font-bold ${p.win ? 'text-yellow-400' : 'text-gray-400'}">${p.win ? '🥇 ' : ''}+${p.xp} XP</span>
+            document.getElementById('resultTitle').textContent = '🏁 Game Complete!';
+            document.getElementById('resultTheme').textContent = 'All participants earned +10 XP';
+            document.getElementById('resultList').innerHTML = result.map(p => {
+                const isMe = wallet.connected && p.fullAddr?.toLowerCase() === wallet.address?.toLowerCase();
+                return `
+                <div class="flex items-center justify-between p-3 rounded-lg ${isMe ? 'bg-orange-500/10 border border-orange-500/30' : 'bg-white/5'}">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">👤</span>
+                        <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
+                        <span class="text-xs text-gray-500">"${p.word}"</span>
                     </div>
-                `}).join('');
+                    <span class="font-bold text-green-400">+${p.xp} XP</span>
+                </div>
+            `}).join('');
 
-                game.state = 'result';
-                showState('result');
-                
-                // 更新房间状态区域显示游戏结束
-                document.getElementById('roomListContent').innerHTML = `
-                    <div class="p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-center">
-                        <div class="text-3xl mb-2">🏁</div>
-                        <p class="text-green-400 font-bold mb-1">Game Complete!</p>
-                        <p class="text-gray-400 text-sm">Click "Play Again" to start a new game</p>
-                    </div>
-                `;
-                
-                toast(userWon ? '🎉 You won +50 XP!' : '🏁 Game complete +10 XP', userWon ? 'bg-yellow-600' : 'bg-green-600');
-                updateHeaderXP();
-            }, 3000);
+            game.state = 'result';
+            showState('result');
+            
+            // 更新房间状态区域显示游戏结束
+            document.getElementById('roomListContent').innerHTML = `
+                <div class="p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-center">
+                    <div class="text-3xl mb-2">🏁</div>
+                    <p class="text-green-400 font-bold mb-1">Game Complete!</p>
+                    <p class="text-gray-400 text-sm">Click "Play Again" to start a new game</p>
+                </div>
+            `;
+            
+            toast('🏁 Game complete! +10 XP', 'bg-green-600');
+            updateHeaderXP();
         }
 
         function startNewRound() {
@@ -1294,17 +1340,14 @@
             stopAITimeout();
             
             isSettling = false;
-            game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null, roomCreatedTime: null };
-            
-            // 清空房间状态
-            localStorage.removeItem('genlayer_room');
-            clearRoomCreatedTime();
+            game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
             
             // 重置按钮
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = false;
             submitBtn.textContent = '🚀 Submit Word';
             document.getElementById('wordInput').disabled = false;
+            document.getElementById('wordInput').value = '';
             
             showState('input');
             renderRoom();
@@ -1312,8 +1355,11 @@
             // 重新启动房间列表轮询
             startRoomListPolling();
             
-            document.getElementById('playersNeeded').textContent = '4';
-            document.getElementById('waitingCount').textContent = '4';
+            // 刷新排行榜
+            fetchLeaderboard();
+            
+            document.getElementById('playersNeeded').textContent = '5';
+            document.getElementById('waitingCount').textContent = '5';
         }
 
         // ========== RENDER ==========
