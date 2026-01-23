@@ -16,6 +16,7 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    console.log('Proxy request body:', body);
     
     const response = await fetch('https://studio.genlayer.com/api', {
       method: 'POST',
@@ -23,7 +24,19 @@ export default async function handler(req, res) {
       body: body,
     });
 
-    const data = await response.json();
+    const responseText = await response.text();
+    console.log('GenLayer response status:', response.status);
+    console.log('GenLayer response body:', responseText);
+    
+    // 尝试解析JSON
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('JSON parse error:', e);
+      data = { error: { code: -32700, message: 'Parse error', data: responseText } };
+    }
+    
     return res.status(200).json(data);
   } catch (error) {
     console.error('Proxy error:', error);
