@@ -254,9 +254,27 @@
 
         // ========== STATE ==========
         let wallet = { connected: false, address: '', short: '' };
-        let game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
+        let game = { 
+            state: 'input', 
+            word: '', 
+            players: [], 
+            countdown: null, 
+            interval: null, 
+            lastTime: Date.now(), 
+            txPending: false, 
+            pollingInterval: null, 
+            aiTimeout: null,
+            roomCreatedTime: null  // 房间创建时间
+        };
         const AI_WORDS = ['node','chain','block','token','gas','hash','mint','swap','stake','vote','dao','nft'];
-        const AI_NAMES = ['Bot-1','Bot-2','Bot-3','Bot-4','Bot-5'];
+        // AI使用虚拟地址格式
+        const AI_NAMES = [
+            '0x7a3B...9f21',
+            '0x4c8E...2d45',
+            '0x9f1A...8c67',
+            '0x2b5D...4e89',
+            '0x6e9C...1a34'
+        ];
         
         // 从localStorage加载数据
         let history = JSON.parse(localStorage.getItem('genlayer_history')) || [];
@@ -299,6 +317,20 @@
 
         let isSettling = false;
         
+        // 房间时间追踪（使用localStorage保持跨会话）
+        function getRoomCreatedTime() {
+            const saved = localStorage.getItem('genlayer_room_created');
+            return saved ? parseInt(saved) : null;
+        }
+        
+        function setRoomCreatedTime(time) {
+            localStorage.setItem('genlayer_room_created', time.toString());
+        }
+        
+        function clearRoomCreatedTime() {
+            localStorage.removeItem('genlayer_room_created');
+        }
+        
         async function refreshRoomList() {
             // 如果正在结算或已结算，跳过刷新
             if (isSettling || game.state === 'settling' || game.state === 'result') return;
@@ -315,24 +347,54 @@
                 chainWords = status.split(',').map(w => w.trim()).filter(w => w);
             }
             
+            // 检查房间状态变化
+            const previousCount = game.players.length;
+            
             // 如果用户已提交词语，不覆盖game.players
             if (game.state !== 'submitted' && game.state !== 'settling') {
                 game.players = chainWords.map((w, i) => ({
-                    addr: 'Player ' + (i+1),
+                    addr: '0x' + Math.random().toString(16).slice(2, 6) + '...' + Math.random().toString(16).slice(2, 6),
                     word: w,
                     ai: false
                 }));
+            }
+            
+            // 追踪房间创建时间
+            if (chainWords.length > 0 && previousCount === 0) {
+                // 房间刚创建
+                if (!getRoomCreatedTime()) {
+                    setRoomCreatedTime(Date.now());
+                }
+            } else if (chainWords.length === 0) {
+                // 房间已结束/清空
+                clearRoomCreatedTime();
             }
             
             // 计算当前玩家数和需要的人数
             const playerCount = game.players.length;
             const needed = Math.max(0, 5 - playerCount);
             
+            // 检查房间是否超过1分钟（60秒）
+            const roomCreatedTime = getRoomCreatedTime();
+            const roomAge = roomCreatedTime ? Math.floor((Date.now() - roomCreatedTime) / 1000) : 0;
+            const canJoin = roomAge < 60; // 1分钟内可以加入
+            const timeLeft = Math.max(0, 60 - roomAge);
+            
             // 更新人数显示
             document.getElementById('playersNeeded').textContent = needed;
             document.getElementById('waitingCount').textContent = needed;
             
             if (playerCount > 0) {
+                // 根据是否超时显示不同的UI
+                let joinButton = '';
+                if (needed > 0 && !game.word) {
+                    if (canJoin) {
+                        joinButton = `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now (${timeLeft}s)</button>`;
+                    } else {
+                        joinButton = `<span class="px-3 py-1 rounded-full bg-gray-500/20 text-gray-400 text-sm">Closed</span>`;
+                    }
+                }
+                
                 container.innerHTML = `
                     <div class="p-4 rounded-lg bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/30">
                         <div class="flex items-center justify-between mb-3">
@@ -340,24 +402,25 @@
                                 <span class="text-2xl">🎮</span>
                                 <div>
                                     <div class="text-white font-bold">${playerCount}/5 Players</div>
-                                    <div class="text-xs text-gray-400">${needed > 0 ? `Need ${needed} more` : 'Game starting!'}</div>
+                                    <div class="text-xs text-gray-400">
+                                        ${needed > 0 ? (canJoin ? `Join within ${timeLeft}s` : 'AI filling room...') : 'Game starting!'}
+                                    </div>
                                 </div>
                             </div>
-                            ${needed > 0 && !game.word ? `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
+                            ${joinButton}
                             ${needed <= 0 ? '<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Full</span>' : ''}
                         </div>
                         <div class="space-y-2">
                             ${game.players.map((p, i) => `
                                 <div class="flex items-center justify-between p-2 rounded bg-white/5">
                                     <div class="flex items-center gap-2">
-                                        <span class="w-8 h-8 rounded-full ${p.ai ? 'bg-blue-500/20' : 'bg-orange-500/20'} flex items-center justify-center text-sm">${p.ai ? '🤖' : '👤'}</span>
+                                        <span class="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center text-sm">👤</span>
                                         <span class="text-gray-300">${p.addr}</span>
-                                        ${p.ai ? '<span class="px-1 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
                                     </div>
                                     <span class="px-2 py-1 rounded bg-green-500/20 text-green-400 text-xs">${p.word}</span>
                                 </div>
                             `).join('')}
-                            ${Array(needed).fill(0).map((_, i) => `
+                            ${Array(Math.min(needed, 3)).fill(0).map((_, i) => `
                                 <div class="flex items-center justify-between p-2 rounded bg-white/5 border border-dashed border-gray-700">
                                     <div class="flex items-center gap-2">
                                         <span class="w-8 h-8 rounded-full bg-gray-700/50 flex items-center justify-center text-sm">❓</span>
@@ -375,6 +438,7 @@
                 // 检查是否满5人
                 if (playerCount >= 5 && !isSettling && game.state !== 'settling' && game.state !== 'result') {
                     isSettling = true;
+                    clearRoomCreatedTime();
                     // 立即停止轮询防止重复触发
                     if (globalPollingInterval) {
                         clearInterval(globalPollingInterval);
@@ -385,6 +449,7 @@
                 }
                 
             } else {
+                clearRoomCreatedTime();
                 container.innerHTML = `
                     <div class="p-4 rounded-lg bg-white/5 text-center">
                         <div class="text-3xl mb-2">🎯</div>
@@ -1115,15 +1180,16 @@
             if (game.players.length >= 5) return;
             if (game.txPending) return;
             
-            const usedNames = game.players.filter(p => p.ai).map(p => p.addr);
-            const name = AI_NAMES.find(n => !usedNames.includes(n)) || 'Bot-X';
+            // 生成虚拟地址
+            const usedAddrs = game.players.filter(p => p.ai).map(p => p.addr);
+            const name = AI_NAMES.find(n => !usedAddrs.includes(n)) || '0x' + Math.random().toString(16).slice(2, 6) + '...' + Math.random().toString(16).slice(2, 6);
             const usedWords = game.players.map(p => p.word);
             const word = AI_WORDS.find(w => !usedWords.includes(w)) || 'chain';
             
-            // AI
+            // 添加玩家（不显示AI标识）
             game.players.push({ addr: name, word: word, ai: true });
             renderRoom();
-            toast(' ' + name + ' ', 'bg-orange-500');
+            toast('New player joined: ' + name, 'bg-orange-500');
             checkFull();
         }
 
@@ -1199,7 +1265,6 @@
                         <div class="flex items-center gap-2">
                             <span class="text-lg">${p.win ? '🏆' : '👤'}</span>
                             <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
-                            ${p.ai ? '<span class="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
                             <span class="text-xs text-gray-500">"${p.word}"</span>
                         </div>
                         <span class="font-bold ${p.win ? 'text-yellow-400' : 'text-gray-400'}">${p.win ? '🥇 ' : ''}+${p.xp} XP</span>
@@ -1229,10 +1294,11 @@
             stopAITimeout();
             
             isSettling = false;
-            game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
+            game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null, roomCreatedTime: null };
             
             // 清空房间状态
             localStorage.removeItem('genlayer_room');
+            clearRoomCreatedTime();
             
             // 重置按钮
             const submitBtn = document.getElementById('submitBtn');
@@ -1259,8 +1325,9 @@
 
             let html = game.players.map(p => {
                 const isMe = p.addr === wallet.short;
-                const cls = p.ai ? 'border-orange-400/30 bg-orange-400/10' : isMe ? 'border-green-500/30 bg-green-500/10' : 'border-orange-500/30 bg-orange-500/10';
-                return `<span class="px-3 py-1.5 rounded-full border text-xs ${cls}">${p.ai ? ' ' : ''}${isMe ? 'You' : p.addr}: <span class="text-orange-400">${p.word}</span></span>`;
+                // 所有玩家使用相同样式，不区分AI
+                const cls = isMe ? 'border-green-500/30 bg-green-500/10' : 'border-orange-500/30 bg-orange-500/10';
+                return `<span class="px-3 py-1.5 rounded-full border text-xs ${cls}">${isMe ? 'You' : p.addr}: <span class="text-orange-400">${p.word}</span></span>`;
             }).join('');
 
             for (let i = n; i < 5; i++) {
@@ -1286,13 +1353,12 @@
             
             document.getElementById('leaderboardList').innerHTML = top30.map((p, i) => {
                 const isMe = wallet.connected && p.fullAddr?.toLowerCase() === wallet.address?.toLowerCase();
-                const isAI = p.addr.startsWith('Bot-') || p.ai;
+                // AI不再显示特殊标签，使用虚拟地址显示
                 return `
                 <div class="flex items-center justify-between p-3 rounded-xl ${isMe ? 'bg-orange-500/20 border border-orange-500/30' : 'bg-white/5'} ${i < 3 ? 'mb-1' : ''}">
                     <div class="flex items-center gap-3">
                         <span class="text-xl w-8 text-center">${emojis[i] || '#' + (i + 1)}</span>
                         <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
-                        ${isAI ? '<span class="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
                     </div>
                     <span class="font-bold ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-orange-400' : 'gradient-text'}">${p.xp} XP</span>
                 </div>
