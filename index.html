@@ -900,7 +900,7 @@
             return new Uint8Array(bytes);
         }
 
-        // 读取合约 - 使用 GenLayer gen_call API
+        // 读取合约 - 使用 GenLayer gen_call API (通过代理避免CORS)
         async function readContract(method, args = []) {
             try {
                 // 使用 msgpack 编码 calldata
@@ -910,7 +910,15 @@
                 
                 console.log('Calling contract:', { method, args, dataHex });
                 
-                const response = await fetch(CONTRACT.rpcUrl, {
+                // 判断是否在Vercel部署环境，使用代理API避免CORS
+                const isDeployed = window.location.hostname !== 'localhost' && 
+                                   window.location.hostname !== '127.0.0.1' &&
+                                   !window.location.hostname.includes('192.168.');
+                const rpcEndpoint = isDeployed ? '/api/rpc' : CONTRACT.rpcUrl;
+                
+                console.log('Using RPC endpoint:', rpcEndpoint, 'isDeployed:', isDeployed);
+                
+                const response = await fetch(rpcEndpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -925,6 +933,14 @@
                         id: Date.now()
                     })
                 });
+                
+                // 检查HTTP响应状态
+                if (!response.ok) {
+                    console.error('HTTP error:', response.status, response.statusText);
+                    const errorText = await response.text();
+                    console.error('Error body:', errorText);
+                    return null;
+                }
                 
                 const result = await response.json();
                 console.log('gen_call result:', result);
