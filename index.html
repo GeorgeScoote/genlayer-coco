@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GenLayer Consensus Challenge</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/msgpack-lite@0.1.26/dist/msgpack.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #0f0f1a 100%); }
         .gradient-text { background: linear-gradient(90deg, #ff6b35, #f7931e, #ffcc02); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
@@ -793,9 +794,10 @@
         //  -  MetaMask 
         async function callContract(method, args) {
             try {
-                const callData = JSON.stringify({ method: method, args: args });
-                const hexData = '0x' + Array.from(new TextEncoder().encode(callData))
-                    .map(b => b.toString(16).padStart(2, '0')).join('');
+                // 使用 msgpack 编码（GenLayer要求）
+                const calldata = { method: method, args: args };
+                const encoded = msgpack.encode(calldata);
+                const hexData = '0x' + Array.from(encoded).map(b => b.toString(16).padStart(2, '0')).join('');
 
                 console.log('Sending TX to GenLayer:', { method, args, hexData });
 
@@ -831,6 +833,13 @@
                 
                 console.log('Using RPC endpoint:', rpcEndpoint, 'isDeployed:', isDeployed);
                 
+                // 使用 msgpack 编码（GenLayer要求）
+                const calldata = { method: method, args: args };
+                const encoded = msgpack.encode(calldata);
+                const hexData = '0x' + Array.from(encoded).map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                console.log('Calling contract:', { method, args, hexData });
+                
                 const response = await fetch(rpcEndpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -840,7 +849,7 @@
                         params: [{
                             from: '0x0000000000000000000000000000000000000000',
                             to: CONTRACT.address,
-                            data: JSON.stringify({ method: method, args: args }),
+                            data: hexData,
                             type: 'read'
                         }],
                         id: Date.now()
@@ -857,15 +866,25 @@
                 
                 if (result.result) {
                     let data = result.result;
-                    // 如果是字符串，尝试解析
+                    
+                    // 如果是十六进制字符串，尝试 msgpack 解码
+                    if (typeof data === 'string' && data.startsWith('0x')) {
+                        try {
+                            const hex = data.slice(2);
+                            const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+                            data = msgpack.decode(bytes);
+                            console.log('Msgpack decoded:', data);
+                        } catch (e) {
+                            console.log('Msgpack decode failed, trying as string:', e);
+                        }
+                    }
+                    
+                    // 如果是字符串，尝试 JSON 解析
                     if (typeof data === 'string') {
-                        // 去掉可能的引号
                         if (data.startsWith('"') && data.endsWith('"')) {
                             data = data.slice(1, -1);
                         }
-                        // 解码转义字符
                         data = data.replace(/\\"/g, '"');
-                        // 解析 JSON
                         if (data.includes('{')) {
                             try {
                                 data = JSON.parse(data);

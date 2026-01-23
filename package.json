@@ -1,19 +1,20 @@
 {
-  "name": "genlayer-consensus-game",
+  "name": "genlayer-consensus-challenge",
   "version": "1.0.0",
-  "description": "Decentralized word-matching game on GenLayer with AI semantic analysis",
+  "description": "GenLayer Consensus Challenge Game - A blockchain-based word matching game",
+  "private": true,
   "scripts": {
-    "dev": "npx serve frontend/public -p 3000",
-    "deploy": "bash scripts/deploy.sh",
-    "test": "echo 'No tests configured'"
-  },
-  "keywords": ["genlayer", "blockchain", "ai", "web3", "game"],
-  "author": "GenLayer Community",
-  "license": "MIT",
-  "devDependencies": {
-    "serve": "^14.2.0"
+    "start": "npx serve .",
+    "dev": "npx serve ."
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "keywords": [
+    "genlayer",
+    "blockchain",
+    "game",
+    "consensus"
+  ],
+  "license": "MIT"
 }

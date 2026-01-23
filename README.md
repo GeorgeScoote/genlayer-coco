@@ -4,97 +4,122 @@ A decentralized word-matching game built on GenLayer blockchain with AI-powered 
 
 ![GenLayer](https://img.shields.io/badge/GenLayer-Testnet-purple.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/Python-3.9+-green.svg)
+![Vercel](https://img.shields.io/badge/Deploy-Vercel-black.svg)
 
-## Overview
+## 🚀 Vercel Deployment (Recommended)
 
-GenLayer Consensus Challenge is a multiplayer game where players submit blockchain-related keywords. The smart contract uses GenLayer's native LLM capabilities to analyze semantic similarity and determine winners.
+### Method 1: One-Click Deploy
 
-**Live Contract:** `0xD4e85A9b3687817CdDBd481a05e238b77e57c79D`
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
 
-## Features
+1. Click the button above
+2. Import your GitHub repository
+3. Click "Deploy" - Done!
 
-- 🧠 **On-chain AI Analysis** - Semantic matching via `gl.exec_prompt`
-- 💾 **Permanent Storage** - Leaderboard & history stored on-chain
-- 🔗 **MetaMask Integration** - Direct wallet connection
-- ⚡ **Real-time Updates** - Auto-refresh after transactions
-
-## Architecture
-
-```
-┌─────────────────┐     ┌──────────────────────┐     ┌─────────────────┐
-│                 │     │                      │     │                 │
-│    Frontend     │────▶│   GenLayer Network   │────▶│  AI Validators  │
-│    (HTML/JS)    │     │  (Smart Contract)    │     │   (LLM Nodes)   │
-│                 │     │                      │     │                 │
-└─────────────────┘     └──────────────────────┘     └─────────────────┘
-```
-
-## Project Structure
-
-```
-genlayer-consensus-game/
-├── contracts/
-│   └── consensus_challenge.py   # GenLayer smart contract
-├── frontend/
-│   └── public/
-│       └── index.html           # Game interface
-├── docs/
-│   ├── API.md                   # Contract API reference
-│   └── DEPLOYMENT.md            # Deployment guide
-├── scripts/
-│   └── deploy.sh                # Deployment script
-├── .env.example
-├── .gitignore
-├── LICENSE
-├── package.json
-└── README.md
-```
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js 18+
-- MetaMask wallet
-- GenLayer CLI (`npm install -g genlayer`)
-
-### Installation
+### Method 2: Vercel CLI
 
 ```bash
-git clone https://github.com/your-org/genlayer-consensus-game.git
-cd genlayer-consensus-game
-npm install
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel --prod
 ```
 
-### Local Development
+### Method 3: Manual Deploy
 
-```bash
-# Start local server
-npm run dev
+1. Push this code to GitHub
+2. Go to [vercel.com](https://vercel.com)
+3. Import your repository
+4. Deploy (no configuration needed!)
 
-# Open http://localhost:3000
+---
+
+## 🔧 CORS Fix Explained
+
+**Problem:** When deployed to Vercel, the browser blocks requests to `https://studio.genlayer.com/api` due to CORS policy.
+
+**Solution:** This project includes a serverless API proxy (`api/rpc.js`) that forwards requests to GenLayer RPC from the server side, bypassing CORS restrictions.
+
+```
+Browser → /api/rpc (Vercel Serverless) → GenLayer RPC
 ```
 
-### Deploy Contract
+---
 
-```bash
-# Deploy to GenLayer Testnet
-npm run deploy
+## 📁 Project Structure
+
+```
+├── index.html        # Main frontend (complete single-page app)
+├── api/
+│   └── rpc.js        # ⭐ Serverless proxy for GenLayer RPC (CORS fix)
+├── vercel.json       # Vercel configuration
+├── package.json      # Project metadata
+├── contracts/        # Smart contract source code
+└── docs/             # Documentation
 ```
 
-## Game Rules
+---
+
+## ⚙️ How It Works
+
+| Component | Purpose |
+|-----------|---------|
+| `index.html` | Complete game UI with MetaMask integration |
+| `api/rpc.js` | Serverless proxy that forwards RPC calls to GenLayer |
+| `vercel.json` | Configures routing and CORS headers |
+
+### Request Flow
+
+1. **Local Development:** Frontend → GenLayer RPC (direct)
+2. **Vercel Production:** Frontend → `/api/rpc` → GenLayer RPC (proxied)
+
+The frontend automatically detects the environment and uses the appropriate endpoint.
+
+---
+
+## 🎮 Game Rules
 
 | Step | Action | Reward |
 |------|--------|--------|
 | 1 | Connect MetaMask wallet | - |
 | 2 | Submit a blockchain keyword | - |
-| 3 | Wait for 5 players | - |
+| 3 | Wait for 2-10 players | - |
 | 4 | AI analyzes semantic similarity | - |
-| 5 | Winners (most similar words) | +50 XP |
-| 6 | Participants | +10 XP |
+| 5 | Match bonus (same word) | +50 XP |
+| 6 | Winner (most matches) | +100 XP |
+| 7 | Participation | +20 XP |
 
-## Contract API
+---
+
+## 🔗 Contract Info
+
+| Field | Value |
+|-------|-------|
+| Address | `0x8443995060C9dd4bBE97A9e7e39F4E73c43cCb19` |
+| Network | GenLayer Testnet |
+| Chain ID | 61983 (0xf21f) |
+| RPC URL | https://studio.genlayer.com/api |
+
+---
+
+## 💻 Local Development
+
+```bash
+# Option 1: Using serve
+npx serve .
+
+# Option 2: Using Python
+python -m http.server 8000
+
+# Open http://localhost:3000 or http://localhost:8000
+```
+
+**Note:** Local development connects directly to GenLayer RPC without the proxy.
+
+---
+
+## 📝 Contract API
 
 ### Write Methods
 
@@ -107,45 +132,41 @@ npm run deploy
 | Method | Returns | Description |
 |--------|---------|-------------|
 | `get_leaderboard` | `dict` | All players' XP |
-| `get_player_xp` | `int` | XP for specific address |
-| `get_players_count` | `int` | Current room count |
-| `get_game_status` | `dict` | Current game state |
+| `get_game_status` | `str` | Current game words |
 | `get_history` | `list` | Recent game history |
-| `has_submitted` | `bool` | Check submission status |
 
-## Configuration
+---
 
-```env
-# .env
-VITE_CONTRACT_ADDRESS=0xD4e85A9b3687817CdDBd481a05e238b77e57c79D
-VITE_RPC_URL=https://studio.genlayer.com/api
-VITE_CHAIN_ID=61999
-```
+## 🛠️ Troubleshooting
 
-## Tech Stack
+### "Failed to fetch" error on Vercel
 
-| Layer | Technology |
-|-------|------------|
-| Smart Contract | Python (GenLayer SDK) |
-| Frontend | HTML5, Tailwind CSS, Vanilla JS |
-| Blockchain | GenLayer Testnet |
-| AI | GenLayer Native LLM |
-| Wallet | MetaMask |
+1. Check if `api/rpc.js` file exists
+2. Verify `vercel.json` configuration
+3. Redeploy the project
 
-## Contributing
+### MetaMask not connecting
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing`)
-3. Commit changes (`git commit -m 'Add feature'`)
-4. Push branch (`git push origin feature/amazing`)
-5. Open Pull Request
+1. Make sure MetaMask is installed
+2. Switch to GenLayer Testnet network
+3. Refresh the page
 
-## Resources
+### Transaction fails
+
+1. Check if you have GEN tokens for gas
+2. Verify you're on the correct network
+3. Try refreshing and reconnecting wallet
+
+---
+
+## 📚 Resources
 
 - [GenLayer Documentation](https://docs.genlayer.com)
 - [GenLayer Studio](https://studio.genlayer.com)
-- [GenLayer Discord](https://discord.gg/8Jm4v89VAu)
+- [Vercel Documentation](https://vercel.com/docs)
 
-## License
+---
+
+## 📜 License
 
 MIT License - see [LICENSE](LICENSE)
