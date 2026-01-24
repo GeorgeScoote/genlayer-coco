@@ -348,12 +348,14 @@
         renderLeaderboard();
         renderHistory();
         checkWalletConnection();
+
+        // ========== ROOM MANAGEMENT ==========
+        let isSettling = false;
         
         // 页面加载时获取一次链上数据（不轮询）
         refreshRoomList();
         fetchLeaderboard();
-
-        // ========== ROOM MANAGEMENT ==========
+        
         // 手动刷新房间状态（不使用轮询）
         function startRoomListPolling() {
             // 仅刷新一次，不再轮询
@@ -375,8 +377,6 @@
             }
             toast('Room status updated', 'bg-green-600');
         }
-
-        let isSettling = false;
         
         async function refreshRoomList() {
             // 如果正在结算或已结算，跳过刷新
@@ -979,8 +979,8 @@
         //  -  MetaMask 
         async function callContract(method, args) {
             try {
-                // 使用 msgpack 编码 calldata
-                const calldata = { method: method, args: args };
+                // GenLayer calldata格式: [method_name, args_array]
+                const calldata = [method, args];
                 const encoded = msgpack.encode(calldata);
                 const hexData = bytesToHex(encoded);
 
@@ -1025,8 +1025,8 @@
         // 读取合约 - 使用 GenLayer gen_call API
         async function readContract(method, args = []) {
             try {
-                // 使用 msgpack 编码 calldata
-                const calldata = { method: method, args: args };
+                // GenLayer calldata格式: [method_name, args_array]
+                const calldata = [method, args];
                 const encoded = msgpack.encode(calldata);
                 const dataHex = bytesToHex(encoded);
                 
@@ -1045,8 +1045,8 @@
                         params: [{
                             from: '0x0000000000000000000000000000000000000000',
                             to: CONTRACT.address,
-                            Data: dataHex,
-                            Type: 'read'
+                            data: dataHex,
+                            type: 'read'
                         }],
                         id: Date.now()
                     })
