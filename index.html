@@ -173,6 +173,7 @@
                         <h3 class="font-bold text-2xl mb-2 text-white">Submitted!</h3>
                         <p class="text-gray-400 text-lg">Your word: <span id="submittedWordText" class="gradient-text font-bold"></span></p>
                         <p class="text-sm text-gray-500 mt-3">Waiting for <span id="waitingCount" class="text-orange-400">4</span> more players...</p>
+                        <p id="countdownText" class="text-sm text-orange-400 mt-2 hidden">⏱️ Room closes in <span id="countdownNum2">5:00</span></p>
                         <button onclick="checkGameStatus()" class="mt-4 px-6 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition">
                             🔄 Check for new players
                         </button>
@@ -979,8 +980,8 @@
         //  -  MetaMask 
         async function callContract(method, args) {
             try {
-                // GenLayer calldata格式: [method_name, args_array]
-                const calldata = [method, args];
+                // 使用 msgpack 编码 calldata（原始格式）
+                const calldata = { method: method, args: args };
                 const encoded = msgpack.encode(calldata);
                 const hexData = bytesToHex(encoded);
 
@@ -1025,8 +1026,8 @@
         // 读取合约 - 使用 GenLayer gen_call API
         async function readContract(method, args = []) {
             try {
-                // GenLayer calldata格式: [method_name, args_array]
-                const calldata = [method, args];
+                // 使用 msgpack 编码 calldata（原始格式）
+                const calldata = { method: method, args: args };
                 const encoded = msgpack.encode(calldata);
                 const dataHex = bytesToHex(encoded);
                 
@@ -1045,8 +1046,8 @@
                         params: [{
                             from: '0x0000000000000000000000000000000000000000',
                             to: CONTRACT.address,
-                            data: dataHex,
-                            type: 'read'
+                            Data: dataHex,
+                            Type: 'read'
                         }],
                         id: Date.now()
                     })
@@ -1301,18 +1302,27 @@
 
         function updateCountdown() {
             const show = game.countdown !== null && game.players.length > 0 && game.players.length < GAME_CONFIG.maxPlayers;
-            document.getElementById('countdownBadge').classList.toggle('hidden', !show);
             
             // 格式化时间显示
             const mins = Math.floor((game.countdown || 0) / 60);
             const secs = (game.countdown || 0) % 60;
             const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
             
-            document.getElementById('countdownNum').textContent = timeStr;
-            document.getElementById('countdownText').classList.toggle('hidden', !show || game.state !== 'submitted');
-            document.getElementById('countdownNum2').textContent = timeStr;
-            document.getElementById('roomCountdown').classList.toggle('hidden', !show);
-            document.getElementById('roomCountdown').textContent = '⏱️ ' + timeStr;
+            // 安全地更新元素（添加空值检查）
+            const countdownBadge = document.getElementById('countdownBadge');
+            const countdownNum = document.getElementById('countdownNum');
+            const countdownText = document.getElementById('countdownText');
+            const countdownNum2 = document.getElementById('countdownNum2');
+            const roomCountdown = document.getElementById('roomCountdown');
+            
+            if (countdownBadge) countdownBadge.classList.toggle('hidden', !show);
+            if (countdownNum) countdownNum.textContent = timeStr;
+            if (countdownText) countdownText.classList.toggle('hidden', !show || game.state !== 'submitted');
+            if (countdownNum2) countdownNum2.textContent = timeStr;
+            if (roomCountdown) {
+                roomCountdown.classList.toggle('hidden', !show);
+                roomCountdown.textContent = '⏱️ ' + timeStr;
+            }
             
             // 更新等待人数
             const waitingEl = document.getElementById('waitingCount');
