@@ -121,11 +121,11 @@
                         <span class="text-lg">🎯</span>
                         <span class="font-medium text-white">Room Status</span>
                     </div>
-                    <button onclick="createRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">+ Join / Create</button>
+                    <span id="roomStatusBadge" class="px-3 py-1 rounded-full bg-white/10 text-gray-400 text-sm">Loading...</span>
                 </div>
                 <div id="roomListContent" class="space-y-2">
                     <div class="p-4 rounded-lg bg-white/5 text-center">
-                        <p class="text-gray-400 text-sm">Connect wallet to see room status</p>
+                        <p class="text-gray-400 text-sm">Loading room status...</p>
                     </div>
                 </div>
             </div>
@@ -419,7 +419,8 @@
                                     <div class="text-xs text-orange-400 mt-1">📅 ${game.theme.name}</div>
                                 </div>
                             </div>
-                            ${!meInRoom && !game.word ? `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
+                            ${!meInRoom && !game.word && wallet.connected ? `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
+                            ${!meInRoom && !game.word && !wallet.connected ? `<button onclick="handleWalletClick()" class="px-4 py-2 text-sm rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect to Join</button>` : ''}
                             ${meInRoom ? '<span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm">You\'re in!</span>' : ''}
                             ${playerCount >= max ? '<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Full</span>' : ''}
                         </div>
@@ -464,13 +465,32 @@
                 }
                 
             } else {
+                // 没有房间 - 显示创建房间按钮
+                document.getElementById('roomStatusBadge').textContent = 'No Room';
+                document.getElementById('roomStatusBadge').className = 'px-3 py-1 rounded-full bg-gray-500/20 text-gray-400 text-sm';
+                
                 container.innerHTML = `
-                    <div class="p-4 rounded-lg bg-white/5 text-center">
-                        <div class="text-3xl mb-2">🎯</div>
-                        <p class="text-gray-300 mb-1">No active room</p>
-                        <p class="text-gray-500 text-sm">Be the first to start a game!</p>
+                    <div class="p-6 rounded-lg bg-white/5 text-center">
+                        <div class="text-4xl mb-3">🎯</div>
+                        <p class="text-gray-300 font-medium mb-2">No active room</p>
+                        <p class="text-gray-500 text-sm mb-4">Be the first to start a new game!</p>
+                        ${wallet.connected ? 
+                            `<button onclick="createRoom()" class="px-6 py-3 rounded-lg btn-primary text-white font-medium shadow-lg shadow-orange-500/20">+ Create Room</button>` :
+                            `<button onclick="handleWalletClick()" class="px-6 py-3 rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect Wallet to Create</button>`
+                        }
                     </div>
                 `;
+            }
+            
+            // 更新roomStatusBadge
+            if (playerCount > 0) {
+                document.getElementById('roomStatusBadge').textContent = playerCount + '/' + max + ' Players';
+                document.getElementById('roomStatusBadge').className = 'px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm font-medium';
+            }
+            
+            // 同步更新currentRoom区域（如果用户已在房间中）
+            if (!document.getElementById('currentRoom').classList.contains('hidden')) {
+                updateLivePlayerList();
             }
         }
 
@@ -479,21 +499,68 @@
                 toast('Connect wallet first', 'bg-red-600');
                 return;
             }
-            // 显示游戏区域让用户提交词语
+            // 检查是否已经在房间中
+            const meInRoom = game.players.some(p => 
+                p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
+            );
+            if (meInRoom) {
+                toast('You are already in this room!', 'bg-yellow-600');
+                return;
+            }
+            
+            // 进入房间 - 显示currentRoom区域
+            document.getElementById('currentRoom').classList.remove('hidden');
+            document.getElementById('currentRoomId').textContent = 'Game Room';
+            document.getElementById('liveRoomBadge').textContent = game.players.length + '/5';
+            updateLivePlayerList();
+            
+            // 显示词语输入区域
             document.getElementById('walletNotice').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
-            toast('Enter a word to join the game!', 'bg-orange-500');
+            
+            toast('✅ Joined room! Enter a word to play.', 'bg-green-600');
         }
 
-        // 链上游戏不需要创建房间，直接提交词语即可
+        // 创建房间
         function createRoom() {
             if (!wallet.connected) {
                 toast('Please connect wallet first', 'bg-red-600');
                 return;
             }
+            
+            // 进入房间 - 显示currentRoom区域
+            document.getElementById('currentRoom').classList.remove('hidden');
+            document.getElementById('currentRoomId').textContent = 'New Game';
+            document.getElementById('liveRoomBadge').textContent = '0/5';
+            updateLivePlayerList();
+            
+            // 显示词语输入区域
             document.getElementById('walletNotice').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
-            toast('Enter a word to start/join game!', 'bg-orange-500');
+            
+            toast('✅ Room created! Enter a word to start.', 'bg-green-600');
+        }
+        
+        // 更新房间内玩家列表
+        function updateLivePlayerList() {
+            const container = document.getElementById('livePlayerList');
+            if (game.players.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-sm">Waiting for players to join...</p>';
+            } else {
+                container.innerHTML = game.players.map(p => {
+                    const isMe = wallet.connected && p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase();
+                    return `
+                    <div class="flex items-center justify-between p-2 rounded ${isMe ? 'bg-orange-500/20' : 'bg-white/5'}">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full ${isMe ? 'bg-orange-500/30' : 'bg-gray-700'} flex items-center justify-center text-xs">👤</span>
+                            <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
+                        </div>
+                        <span class="text-green-400 text-xs">${p.word}</span>
+                    </div>
+                    `;
+                }).join('');
+            }
+            document.getElementById('liveRoomBadge').textContent = game.players.length + '/5';
         }
 
         function leaveRoom() {
@@ -637,7 +704,7 @@
             document.getElementById('networkName').textContent = 'GenLayer';
             document.getElementById('walletDisplay').textContent = address;
             document.getElementById('walletNotice').classList.add('hidden');
-            document.getElementById('gameArea').classList.remove('hidden');
+            // 注意：不自动显示gameArea，等用户点击"Create Room"或"Join"后才显示
             
             // 显示header XP
             document.getElementById('headerXP').classList.remove('hidden');
@@ -672,20 +739,29 @@
             }
         }
 
-        // 
+        // 从链上同步房间状态
         async function syncRoomFromChain() {
             try {
                 const status = await readContract('get_game_status', []);
-                console.log(' :', status);
+                console.log('Sync room from chain:', status);
                 
-                if (status && status.addresses && status.words) {
-                    // 
+                // 解析数据
+                let roomData = null;
+                if (status && typeof status === 'object') {
+                    roomData = status;
+                } else if (status && typeof status === 'string') {
+                    try { roomData = JSON.parse(status); } catch(e) {}
+                }
+                
+                if (roomData && roomData.addresses && roomData.words && roomData.addresses.length > 0) {
+                    // 构建玩家列表
                     game.players = [];
+                    let meInRoom = false;
                     
-                    for (let i = 0; i < status.addresses.length; i++) {
-                        const addr = status.addresses[i];
-                        const word = status.words[i];
-                        const isMe = addr.toLowerCase() === wallet.address.toLowerCase();
+                    for (let i = 0; i < roomData.addresses.length; i++) {
+                        const addr = roomData.addresses[i];
+                        const word = roomData.words[i];
+                        const isMe = wallet.connected && addr.toLowerCase() === wallet.address.toLowerCase();
                         
                         game.players.push({
                             addr: isMe ? wallet.short : (addr.slice(0, 6) + '...' + addr.slice(-4)),
@@ -694,26 +770,31 @@
                             fullAddr: addr
                         });
                         
-                        // 
+                        // 如果是自己，恢复游戏状态
                         if (isMe) {
+                            meInRoom = true;
                             game.word = word;
+                            game.state = 'submitted';
                             showState('submitted');
                             document.getElementById('submittedWordText').textContent = word;
+                            
+                            // 显示游戏区域
+                            document.getElementById('gameArea').classList.remove('hidden');
+                            document.getElementById('currentRoom').classList.remove('hidden');
+                            document.getElementById('currentRoomId').textContent = 'Game Room';
+                            document.getElementById('liveRoomBadge').textContent = roomData.addresses.length + '/5';
                         }
                     }
                     
                     renderRoom();
+                    updateLivePlayerList();
+                    
                     const syncNeeded = Math.max(0, GAME_CONFIG.minPlayers - game.players.length);
                     document.getElementById('playersNeeded').textContent = syncNeeded > 0 ? syncNeeded : 'Ready';
                     document.getElementById('waitingCount').textContent = syncNeeded > 0 ? syncNeeded : 'Ready';
                     
-                    // 
-                    if (game.players.length > 0 && !game.players.some(p => p.fullAddr?.toLowerCase() === wallet.address.toLowerCase())) {
-                        startPolling();
-                    }
-                    
-                    // 
-                    if (game.state === 'submitted') {
+                    // 如果用户在房间中，启动计时
+                    if (meInRoom) {
                         startCountdown();
                         startPolling();
                     }
@@ -811,6 +892,9 @@
                     // 启动房间计时器
                     startCountdown();
                     startAITimeout();
+                    
+                    // 更新房间内玩家列表
+                    updateLivePlayerList();
                     
                     // 刷新房间列表
                     setTimeout(() => refreshRoomList(), 2000);
