@@ -121,7 +121,10 @@
                         <span class="text-lg">🎯</span>
                         <span class="font-medium text-white">Room Status</span>
                     </div>
-                    <span id="roomStatusBadge" class="px-3 py-1 rounded-full bg-white/10 text-gray-400 text-sm">Loading...</span>
+                    <div class="flex items-center gap-2">
+                        <button id="refreshBtn" onclick="manualRefresh()" class="px-3 py-1.5 text-sm rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 font-medium transition">🔄 Refresh</button>
+                        <span id="roomStatusBadge" class="px-3 py-1 rounded-full bg-white/10 text-gray-400 text-sm">Loading...</span>
+                    </div>
                 </div>
                 <div id="roomListContent" class="space-y-2">
                     <div class="p-4 rounded-lg bg-white/5 text-center">
@@ -169,8 +172,11 @@
                         <div class="text-6xl mb-4">✅</div>
                         <h3 class="font-bold text-2xl mb-2 text-white">Submitted!</h3>
                         <p class="text-gray-400 text-lg">Your word: <span id="submittedWordText" class="gradient-text font-bold"></span></p>
-                        <p class="text-sm text-gray-500 mt-3">Waiting for <span id="waitingCount" class="text-orange-400">1</span> more player to start...</p>
-                        <p id="countdownText" class="text-sm text-orange-400 mt-2 hidden">⏱️ Room closes in <span id="countdownNum2">5:00</span></p>
+                        <p class="text-sm text-gray-500 mt-3">Waiting for <span id="waitingCount" class="text-orange-400">4</span> more players...</p>
+                        <button onclick="checkGameStatus()" class="mt-4 px-6 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition">
+                            🔄 Check for new players
+                        </button>
+                        <p class="text-xs text-gray-600 mt-2">Click to refresh room status</p>
                     </div>
                     <div id="stateSettling" class="hidden max-w-md mx-auto text-center">
                         <div class="text-6xl mb-4 animate-bounce">🤖</div>
@@ -307,16 +313,16 @@
         const AI_WORDS = getWeeklyKeywords();
         const AI_NAMES = ['Bot-Alpha','Bot-Beta','Bot-Gamma','Bot-Delta','Bot-Omega'];
         
-        // 从localStorage加载数据
-        let history = JSON.parse(localStorage.getItem('genlayer_history')) || [];
-        let leaderboard = JSON.parse(localStorage.getItem('genlayer_leaderboard')) || [];
+        // 数据存储（从链上加载，不使用localStorage）
+        let history = [];
+        let leaderboard = [];
         
-        // 保存到localStorage的函数
+        // 这些函数保留但不再使用localStorage
         function saveLeaderboard() {
-            localStorage.setItem('genlayer_leaderboard', JSON.stringify(leaderboard));
+            // 排行榜由链上管理，不需要本地保存
         }
         function saveHistory() {
-            localStorage.setItem('genlayer_history', JSON.stringify(history));
+            // 历史记录仅为当前会话
         }
         
         // ========== ROOM SYSTEM ==========
@@ -342,19 +348,32 @@
         renderLeaderboard();
         renderHistory();
         checkWalletConnection();
-        startRoomListPolling();
+        
+        // 页面加载时获取一次链上数据（不轮询）
+        refreshRoomList();
+        fetchLeaderboard();
 
         // ========== ROOM MANAGEMENT ==========
+        // 手动刷新房间状态（不使用轮询）
         function startRoomListPolling() {
-            // 先停止之前的轮询
-            if (globalPollingInterval) {
-                clearInterval(globalPollingInterval);
-                globalPollingInterval = null;
-            }
+            // 仅刷新一次，不再轮询
             refreshRoomList();
-            globalPollingInterval = setInterval(() => {
-                refreshRoomList();
-            }, 3000);
+        }
+        
+        // 手动刷新按钮调用
+        async function manualRefresh() {
+            const btn = document.getElementById('refreshBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '🔄 Loading...';
+            }
+            await refreshRoomList();
+            await fetchLeaderboard();
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '🔄 Refresh';
+            }
+            toast('Room status updated', 'bg-green-600');
         }
 
         let isSettling = false;
@@ -577,9 +596,12 @@
             document.getElementById('liveRoomBadge').textContent = playerCount + '/5';
         }
 
-        // 监听 localStorage 变化（备用同步）
-        window.addEventListener('storage', (e) => {
-            refreshRoomList();
+        // 监听页面可见性变化，切回页面时刷新链上数据
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                refreshRoomList();
+                fetchLeaderboard();
+            }
         });
 
         // ========== WALLET ==========
@@ -1146,80 +1168,70 @@
             }
         }
 
-        // ==========  - 3 ==========
+        // ========== 游戏状态检查（手动刷新，不使用轮询）==========
         function startPolling() {
-            stopPolling();
-            console.log(' ...');
-            
-            game.pollingInterval = setInterval(async () => {
-                try {
-                    // 
-                    const status = await readContract('get_game_status', []);
-                    console.log(' :', status);
-                    
-                    if (status && status.addresses) {
-                        const chainCount = status.addresses.length;
-                        
-                        // AI
-                        for (let i = 0; i < chainCount; i++) {
-                            const addr = status.addresses[i];
-                            const word = status.words[i];
-                            const exists = game.players.some(p => 
-                                p.fullAddr?.toLowerCase() === addr.toLowerCase()
-                            );
-                            
-                            if (!exists) {
-                                const isMe = addr.toLowerCase() === wallet.address.toLowerCase();
-                                game.players.push({
-                                    addr: isMe ? wallet.short : (addr.slice(0, 6) + '...' + addr.slice(-4)),
-                                    word: word,
-                                    ai: false,
-                                    fullAddr: addr
-                                });
-                                toast(' !', 'bg-cyan-600');
-                            }
-                        }
-                        
-                        renderRoom();
-                        const currentNeeded = Math.max(0, GAME_CONFIG.minPlayers - game.players.length);
-                        document.getElementById('playersNeeded').textContent = currentNeeded > 0 ? currentNeeded : 'Ready';
-                        document.getElementById('waitingCount').textContent = currentNeeded > 0 ? currentNeeded : 'Ready';
-                        
-                        // 0
-                        if (chainCount === 0 && game.state === 'submitted') {
-                            console.log(' !');
-                            stopPolling();
-                            stopCountdown();
-                            stopAITimeout();
-                            
-                            await fetchLeaderboard();
-                            await fetchHistory();
-                            
-                            toast(' ', 'bg-green-600');
-                            switchPage('leaderboard');
-                            startNewRound();
-                        }
-                        
-                        // 房间满员
-                        if (chainCount >= GAME_CONFIG.maxPlayers && game.state === 'submitted') {
-                            console.log('Room full, starting game...');
-                            stopPolling();
-                            stopCountdown();
-                            stopAITimeout();
-                            showState('settling');
-                            toast('🎮 Room full! Starting game...', 'bg-orange-500');
-                        }
-                    }
-                } catch (err) {
-                    console.error(':', err);
-                }
-            }, 3000);
+            // 不再使用轮询，改为手动刷新
+            console.log('Polling disabled - use manual refresh');
         }
 
         function stopPolling() {
             if (game.pollingInterval) {
                 clearInterval(game.pollingInterval);
                 game.pollingInterval = null;
+            }
+        }
+        
+        // 检查游戏状态（手动调用）
+        async function checkGameStatus() {
+            try {
+                const status = await readContract('get_game_status', []);
+                console.log('Game status:', status);
+                
+                // 解析数据
+                let roomData = null;
+                if (status && typeof status === 'object') {
+                    roomData = status;
+                } else if (status && typeof status === 'string') {
+                    try { roomData = JSON.parse(status); } catch(e) {}
+                }
+                
+                if (roomData && roomData.addresses) {
+                    const chainCount = roomData.addresses.length;
+                    
+                    // 房间清空 = 游戏已结算
+                    if (chainCount === 0 && game.state === 'submitted') {
+                        console.log('Room cleared - game settled!');
+                        stopCountdown();
+                        stopAITimeout();
+                        
+                        await fetchLeaderboard();
+                        toast('🏁 Game settled! Check leaderboard.', 'bg-green-600');
+                        switchPage('leaderboard');
+                        startNewRound();
+                        return;
+                    }
+                    
+                    // 房间满员
+                    if (chainCount >= GAME_CONFIG.maxPlayers && game.state === 'submitted') {
+                        console.log('Room full - game starting!');
+                        stopCountdown();
+                        stopAITimeout();
+                        showState('settling');
+                        toast('🎮 Room full! Game starting...', 'bg-orange-500');
+                        
+                        // 3秒后显示结果
+                        setTimeout(async () => {
+                            await fetchLeaderboard();
+                            showGameResult();
+                        }, 3000);
+                        return;
+                    }
+                    
+                    // 更新玩家列表
+                    await refreshRoomList();
+                }
+            } catch (err) {
+                console.error('Check game status error:', err);
             }
         }
 
@@ -1476,9 +1488,6 @@
             
             isSettling = false;
             game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
-            
-            // 清空房间状态
-            localStorage.removeItem('genlayer_room');
             
             // 重置按钮
             const submitBtn = document.getElementById('submitBtn');
