@@ -1,5 +1,6 @@
 // GenLayer RPC Proxy - 解决Vercel部署的CORS问题
 export default async function handler(req, res) {
+  // 设置CORS头
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -8,14 +9,30 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
+    // 确保请求体是字符串格式
+    const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    
+    console.log('Proxying to GenLayer:', body);
+    
     const response = await fetch('https://studio.genlayer.com/api', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req.body),
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: body,
     });
+    
     const data = await response.json();
+    console.log('GenLayer response:', JSON.stringify(data).slice(0, 500));
+    
     return res.status(200).json(data);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error('Proxy error:', error);
+    return res.status(500).json({ 
+      jsonrpc: '2.0',
+      error: { code: -32603, message: error.message },
+      id: null
+    });
   }
 }

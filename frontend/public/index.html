@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GenLayer Consensus Challenge</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/msgpack-lite@0.1.26/dist/msgpack.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #0f0f1a 100%); }
         .gradient-text { background: linear-gradient(90deg, #ff6b35, #f7931e, #ffcc02); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
@@ -64,31 +63,27 @@
             <div class="space-y-4 text-sm text-gray-300">
                 <div class="flex gap-3 items-start p-3 rounded-lg bg-white/5">
                     <span class="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">1</span>
-                    <span>Connect wallet and join a room</span>
+                    <span>Connect your wallet to GenLayer network</span>
                 </div>
                 <div class="flex gap-3 items-start p-3 rounded-lg bg-white/5">
                     <span class="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">2</span>
-                    <span>Submit a keyword related to the <strong class="text-orange-400">weekly theme</strong></span>
+                    <span>Submit a blockchain-related keyword</span>
                 </div>
                 <div class="flex gap-3 items-start p-3 rounded-lg bg-white/5">
                     <span class="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">3</span>
-                    <span>Room lasts <strong class="text-yellow-400">5 minutes</strong> • 2-10 players</span>
+                    <span>Wait for 5 players (or AI fills in 60s)</span>
                 </div>
                 <div class="flex gap-3 items-start p-3 rounded-lg bg-white/5">
                     <span class="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">4</span>
-                    <span>If your word <strong class="text-green-400">matches</strong> another player's, you both get bonus XP!</span>
+                    <span>AI analyzes word similarity on-chain</span>
                 </div>
                 <div class="flex gap-3 items-start p-3 rounded-lg bg-white/5">
                     <span class="w-6 h-6 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs font-bold">★</span>
-                    <div>
-                        <div>Base: <strong class="text-gray-400">+20 XP</strong></div>
-                        <div>Match bonus: <strong class="text-green-400">+50 XP</strong></div>
-                        <div>Champion: <strong class="text-yellow-400">+100 XP</strong></div>
-                    </div>
+                    <span>Top matches win <strong class="text-yellow-400">+50 XP</strong></span>
                 </div>
             </div>
             <div class="mt-5 pt-4 border-t border-white/10 text-xs text-gray-500 text-center">
-                🔄 New theme every week • Powered by GenLayer
+                Powered by GenLayer • All data on-chain
             </div>
         </div>
     </div>
@@ -99,11 +94,7 @@
                 <h1 class="text-4xl font-bold mb-3">
                     <span class="gradient-text">Consensus Challenge</span>
                 </h1>
-                <p class="text-gray-400 mb-2">Submit a word → Match with players → Win XP rewards</p>
-                <div id="weeklyTheme" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30">
-                    <span class="text-orange-400">📅</span>
-                    <span class="text-orange-300 text-sm font-medium">This Week's Theme: Loading...</span>
-                </div>
+                <p class="text-gray-400">Submit a word → Match with players → Win XP rewards</p>
             </div>
 
             <div id="walletNotice" class="card rounded-xl p-6 mb-6 text-center glow">
@@ -121,14 +112,11 @@
                         <span class="text-lg">🎯</span>
                         <span class="font-medium text-white">Room Status</span>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button id="refreshBtn" onclick="manualRefresh()" class="px-3 py-1.5 text-sm rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 font-medium transition">🔄 Refresh</button>
-                        <span id="roomStatusBadge" class="px-3 py-1 rounded-full bg-white/10 text-gray-400 text-sm">Loading...</span>
-                    </div>
+                    <button onclick="createRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">+ Join / Create</button>
                 </div>
                 <div id="roomListContent" class="space-y-2">
                     <div class="p-4 rounded-lg bg-white/5 text-center">
-                        <p class="text-gray-400 text-sm">Loading room status...</p>
+                        <p class="text-gray-400 text-sm">Connect wallet to see room status</p>
                     </div>
                 </div>
             </div>
@@ -160,29 +148,25 @@
                                 <span id="countdownBadge" class="text-orange-400 font-medium hidden">(<span id="countdownNum">20</span>s)</span>
                             </div>
                         </div>
-                        <input type="text" id="wordInput" placeholder="Enter a keyword related to this week's theme..." maxlength="50"
+                        <input type="text" id="wordInput" placeholder="Enter a keyword (e.g. blockchain, defi, nft...)" maxlength="50"
                             class="w-full px-5 py-4 mb-4 bg-white/5 border border-white/10 rounded-xl text-lg focus:border-orange-500 focus:outline-none focus:bg-white/10 transition"
                             onkeypress="if(event.key==='Enter')submitWord()">
                         <button onclick="submitWord()" id="submitBtn" class="w-full py-4 rounded-xl font-bold btn-primary text-white text-lg shadow-lg shadow-orange-500/30 transition hover:scale-[1.02]">
                             🚀 Submit Word
                         </button>
-                        <p class="text-center text-xs text-gray-500 mt-4">⏱️ Room lasts 5 min • Match words to win bonus XP!</p>
+                        <p class="text-center text-xs text-gray-500 mt-4">⏱️ AI fills empty slots after 60 seconds</p>
                     </div>
                     <div id="stateSubmitted" class="hidden max-w-md mx-auto text-center">
                         <div class="text-6xl mb-4">✅</div>
                         <h3 class="font-bold text-2xl mb-2 text-white">Submitted!</h3>
                         <p class="text-gray-400 text-lg">Your word: <span id="submittedWordText" class="gradient-text font-bold"></span></p>
                         <p class="text-sm text-gray-500 mt-3">Waiting for <span id="waitingCount" class="text-orange-400">4</span> more players...</p>
-                        <p id="countdownText" class="text-sm text-orange-400 mt-2 hidden">⏱️ Room closes in <span id="countdownNum2">5:00</span></p>
-                        <button onclick="checkGameStatus()" class="mt-4 px-6 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition">
-                            🔄 Check for new players
-                        </button>
-                        <p class="text-xs text-gray-600 mt-2">Click to refresh room status</p>
+                        <p id="countdownText" class="text-sm text-orange-400 mt-2 hidden">⏱️ AI joining in <span id="countdownNum2">60</span>s</p>
                     </div>
                     <div id="stateSettling" class="hidden max-w-md mx-auto text-center">
                         <div class="text-6xl mb-4 animate-bounce">🤖</div>
-                        <h3 class="font-bold text-2xl mb-2 gradient-text">Calculating Results...</h3>
-                        <p class="text-gray-400">Finding matching words and distributing XP</p>
+                        <h3 class="font-bold text-2xl mb-2 gradient-text">Analyzing Words...</h3>
+                        <p class="text-gray-400">AI is calculating semantic similarity</p>
                     </div>
                     <div id="stateResult" class="hidden max-w-lg mx-auto">
                         <div class="text-center mb-6">
@@ -263,67 +247,26 @@
         // ========== CONTRACT CONFIG ==========
         const CONTRACT = {
             address: '0x8443995060C9dd4bBE97A9e7e39F4E73c43cCb19',
-            rpcUrl: 'https://studio.genlayer.com/api',
+            rpcUrl: 'https://studio.genlayer.com/api/json-rpc',
             chainId: 61983
         };
 
-        // ========== GAME CONFIG ==========
-        const GAME_CONFIG = {
-            roomDuration: 5 * 60,  // 5分钟房间时间
-            minPlayers: 5,         // 5人开始（与合约匹配）
-            maxPlayers: 5,         // 最多5人（与合约匹配）
-            aiDelay: 3 * 60,       // 3分钟后AI开始补位
-            xpWinner: 100,         // 赢家XP
-            xpParticipant: 20,     // 参与者XP
-            xpBonus: 50            // 匹配奖励XP
-        };
-        
-        // 每周主题系统
-        const WEEKLY_THEMES = [
-            { name: 'DeFi Week', keywords: ['swap', 'liquidity', 'yield', 'farm', 'pool', 'stake', 'lend', 'borrow', 'apy', 'tvl'] },
-            { name: 'NFT Week', keywords: ['mint', 'collection', 'rare', 'art', 'creator', 'royalty', 'metadata', 'opensea', 'pfp', 'drop'] },
-            { name: 'Layer2 Week', keywords: ['rollup', 'zk', 'optimistic', 'bridge', 'scaling', 'gas', 'fast', 'cheap', 'arbitrum', 'polygon'] },
-            { name: 'DAO Week', keywords: ['vote', 'proposal', 'governance', 'treasury', 'delegate', 'quorum', 'snapshot', 'multisig', 'council', 'token'] },
-            { name: 'Security Week', keywords: ['audit', 'hack', 'exploit', 'bug', 'bounty', 'safe', 'verify', 'secure', 'risk', 'insurance'] }
-        ];
-        
-        function getWeeklyTheme() {
-            const weekNum = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000));
-            return WEEKLY_THEMES[weekNum % WEEKLY_THEMES.length];
-        }
-        
-        function getWeeklyKeywords() {
-            return getWeeklyTheme().keywords;
-        }
-
         // ========== STATE ==========
         let wallet = { connected: false, address: '', short: '' };
-        let game = { 
-            state: 'input', 
-            word: '', 
-            players: [], 
-            countdown: null, 
-            interval: null, 
-            lastTime: Date.now(), 
-            txPending: false, 
-            pollingInterval: null, 
-            aiTimeout: null,
-            roomStartTime: null,
-            theme: getWeeklyTheme()
-        };
-        const AI_WORDS = getWeeklyKeywords();
-        const AI_NAMES = ['Bot-Alpha','Bot-Beta','Bot-Gamma','Bot-Delta','Bot-Omega'];
+        let game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
+        const AI_WORDS = ['node','chain','block','token','gas','hash','mint','swap','stake','vote','dao','nft'];
+        const AI_NAMES = ['Bot-1','Bot-2','Bot-3','Bot-4','Bot-5'];
         
-        // 数据存储（从链上加载，不使用localStorage）
-        let history = [];
-        let leaderboard = [];
+        // 从localStorage加载数据
+        let history = JSON.parse(localStorage.getItem('genlayer_history')) || [];
+        let leaderboard = JSON.parse(localStorage.getItem('genlayer_leaderboard')) || [];
         
-        // 这些函数保留但不再使用localStorage
+        // 保存到localStorage的函数
         function saveLeaderboard() {
-            // 排行榜由链上管理，不需要本地保存
+            localStorage.setItem('genlayer_leaderboard', JSON.stringify(leaderboard));
         }
         function saveHistory() {
-            // 历史记录仅为当前会话
+            localStorage.setItem('genlayer_history', JSON.stringify(history));
         }
         
         // ========== ROOM SYSTEM ==========
@@ -334,151 +277,86 @@
         let globalPollingInterval = null;
         let pollCount = 0;
         
-        // 初始化主题显示
-        function initTheme() {
-            const theme = getWeeklyTheme();
-            document.getElementById('weeklyTheme').innerHTML = `
-                <span class="text-orange-400">📅</span>
-                <span class="text-orange-300 text-sm font-medium">This Week: ${theme.name}</span>
-                <span class="text-gray-500 text-xs">(${theme.keywords.slice(0,3).join(', ')}...)</span>
-            `;
-        }
-        
-        initTheme();
         renderRoom();
         renderLeaderboard();
         renderHistory();
         checkWalletConnection();
+        startRoomListPolling();
 
         // ========== ROOM MANAGEMENT ==========
-        let isSettling = false;
-        
-        // 页面加载时获取一次链上数据（不轮询）
-        refreshRoomList();
-        fetchLeaderboard();
-        
-        // 手动刷新房间状态（不使用轮询）
         function startRoomListPolling() {
-            // 仅刷新一次，不再轮询
+            // 先停止之前的轮询
+            if (globalPollingInterval) {
+                clearInterval(globalPollingInterval);
+                globalPollingInterval = null;
+            }
             refreshRoomList();
+            globalPollingInterval = setInterval(() => {
+                refreshRoomList();
+            }, 3000);
         }
-        
-        // 手动刷新按钮调用
-        async function manualRefresh() {
-            const btn = document.getElementById('refreshBtn');
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '🔄 Loading...';
-            }
-            await refreshRoomList();
-            await fetchLeaderboard();
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '🔄 Refresh';
-            }
-            toast('Room status updated', 'bg-green-600');
-        }
+
+        let isSettling = false;
         
         async function refreshRoomList() {
             // 如果正在结算或已结算，跳过刷新
             if (isSettling || game.state === 'settling' || game.state === 'result') return;
             
-            console.log('=== refreshRoomList START ===');
-            
             // 从链上读取房间状态
-            const status = await readContract('get_game_status', []);
+            const status = await readContract('get', []);
             console.log('Chain room status:', status);
-            console.log('Status type:', typeof status);
-            console.log('Status stringified:', JSON.stringify(status));
             
             const container = document.getElementById('roomListContent');
             
-            // 解析合约返回的数据
-            // 合约返回: {"players": N, "addresses": ["0x..."], "words": ["word1"]}
-            let roomData = null;
-            if (status && typeof status === 'object') {
-                roomData = status;
-                console.log('Using status as object');
-            } else if (status && typeof status === 'string') {
-                try { 
-                    roomData = JSON.parse(status); 
-                    console.log('Parsed status from string');
-                } catch(e) {
-                    console.log('Failed to parse status string:', e);
-                }
-            } else {
-                console.log('Status is null/undefined or unexpected type');
+            // 合约返回 "word1,word2,word3" 格式
+            let chainWords = [];
+            if (status && typeof status === 'string' && status.trim() !== '') {
+                chainWords = status.split(',').map(w => w.trim()).filter(w => w);
             }
             
-            console.log('roomData:', roomData);
-            console.log('roomData.addresses:', roomData?.addresses);
-            console.log('roomData.words:', roomData?.words);
-            
-            // 构建玩家列表
+            // 如果用户已提交词语，不覆盖game.players
             if (game.state !== 'submitted' && game.state !== 'settling') {
-                if (roomData && roomData.addresses && roomData.words && roomData.addresses.length > 0) {
-                    game.players = roomData.addresses.map((addr, i) => ({
-                        addr: addr.slice(0, 6) + '...' + addr.slice(-4),
-                        fullAddr: addr,
-                        word: roomData.words[i] || '',
-                        ai: false
-                    }));
-                    console.log('Built players from chain:', game.players.length);
-                } else {
-                    game.players = [];
-                    console.log('No players from chain data');
-                }
+                game.players = chainWords.map((w, i) => ({
+                    addr: 'Player ' + (i+1),
+                    word: w,
+                    ai: false
+                }));
             }
-            
-            console.log('Final game.players:', game.players);
-            console.log('=== refreshRoomList END ===');
             
             // 计算当前玩家数和需要的人数
             const playerCount = game.players.length;
-            const needed = Math.max(0, GAME_CONFIG.minPlayers - playerCount);
-            const max = GAME_CONFIG.maxPlayers;
+            const needed = Math.max(0, 5 - playerCount);
             
             // 更新人数显示
-            document.getElementById('playersNeeded').textContent = needed > 0 ? needed : 'Ready';
-            document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
+            document.getElementById('playersNeeded').textContent = needed;
+            document.getElementById('waitingCount').textContent = needed;
             
             if (playerCount > 0) {
-                // 检查当前用户是否已在房间中
-                const meInRoom = wallet.connected && game.players.some(p => 
-                    p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
-                );
-                
-                const emptySlots = Math.min(3, max - playerCount);
                 container.innerHTML = `
                     <div class="p-4 rounded-lg bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/30">
                         <div class="flex items-center justify-between mb-3">
                             <div class="flex items-center gap-2">
                                 <span class="text-2xl">🎮</span>
                                 <div>
-                                    <div class="text-white font-bold">${playerCount}/${max} Players</div>
-                                    <div class="text-xs text-gray-400">${playerCount < GAME_CONFIG.minPlayers ? `Need ${needed} more to start` : 'Ready to play!'}</div>
-                                    <div class="text-xs text-orange-400 mt-1">📅 ${game.theme.name}</div>
+                                    <div class="text-white font-bold">${playerCount}/5 Players</div>
+                                    <div class="text-xs text-gray-400">${needed > 0 ? `Need ${needed} more` : 'Game starting!'}</div>
                                 </div>
                             </div>
-                            ${!meInRoom && !game.word && wallet.connected ? `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
-                            ${!meInRoom && !game.word && !wallet.connected ? `<button onclick="handleWalletClick()" class="px-4 py-2 text-sm rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect to Join</button>` : ''}
-                            ${meInRoom ? '<span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm">You\'re in!</span>' : ''}
-                            ${playerCount >= max ? '<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Full</span>' : ''}
+                            ${needed > 0 && !game.word ? `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
+                            ${needed <= 0 ? '<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Full</span>' : ''}
                         </div>
-                        <div class="space-y-2 max-h-64 overflow-y-auto">
-                            ${game.players.map((p, i) => {
-                                const isMe = wallet.connected && p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase();
-                                return `
-                                <div class="flex items-center justify-between p-2 rounded ${isMe ? 'bg-orange-500/20 border border-orange-500/30' : 'bg-white/5'}">
+                        <div class="space-y-2">
+                            ${game.players.map((p, i) => `
+                                <div class="flex items-center justify-between p-2 rounded bg-white/5">
                                     <div class="flex items-center gap-2">
-                                        <span class="w-8 h-8 rounded-full ${p.ai ? 'bg-blue-500/20' : isMe ? 'bg-orange-500/30' : 'bg-orange-500/20'} flex items-center justify-center text-sm">${p.ai ? '🤖' : '👤'}</span>
-                                        <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
+                                        <span class="w-8 h-8 rounded-full ${p.ai ? 'bg-blue-500/20' : 'bg-orange-500/20'} flex items-center justify-center text-sm">${p.ai ? '🤖' : '👤'}</span>
+                                        <span class="text-gray-300">${p.addr}</span>
                                         ${p.ai ? '<span class="px-1 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
                                     </div>
                                     <span class="px-2 py-1 rounded bg-green-500/20 text-green-400 text-xs">${p.word}</span>
                                 </div>
-                            `}).join('')}
-                            ${Array(emptySlots).fill(0).map((_, i) => `
+                            `).join('')}
+                            ${Array(needed).fill(0).map((_, i) => `
                                 <div class="flex items-center justify-between p-2 rounded bg-white/5 border border-dashed border-gray-700">
                                     <div class="flex items-center gap-2">
                                         <span class="w-8 h-8 rounded-full bg-gray-700/50 flex items-center justify-center text-sm">❓</span>
@@ -493,52 +371,26 @@
                 
                 renderRoom();
                 
-                // 检查是否满员
-                if (playerCount >= max && !isSettling && game.state !== 'settling' && game.state !== 'result') {
+                // 检查是否满5人
+                if (playerCount >= 5 && !isSettling && game.state !== 'settling' && game.state !== 'result') {
                     isSettling = true;
                     // 立即停止轮询防止重复触发
                     if (globalPollingInterval) {
                         clearInterval(globalPollingInterval);
                         globalPollingInterval = null;
                     }
-                    toast('🎮 Room full! Game starting!', 'bg-green-600');
+                    toast('Game starting!', 'bg-green-600');
                     setTimeout(() => settle(), 2000);
                 }
                 
             } else {
-                // 没有房间 - 显示创建房间按钮和调试信息
-                document.getElementById('roomStatusBadge').textContent = 'No Room';
-                document.getElementById('roomStatusBadge').className = 'px-3 py-1 rounded-full bg-gray-500/20 text-gray-400 text-sm';
-                
-                // 显示调试信息
-                const debugInfo = status === null ? 'RPC returned null (check console)' : 
-                                  status === undefined ? 'RPC returned undefined' :
-                                  typeof status === 'string' ? 'Got string: ' + status.slice(0, 50) :
-                                  'Got: ' + JSON.stringify(status).slice(0, 50);
-                
                 container.innerHTML = `
-                    <div class="p-6 rounded-lg bg-white/5 text-center">
-                        <div class="text-4xl mb-3">🎯</div>
-                        <p class="text-gray-300 font-medium mb-2">No active room</p>
-                        <p class="text-gray-500 text-sm mb-4">Be the first to start a new game!</p>
-                        ${wallet.connected ? 
-                            `<button onclick="createRoom()" class="px-6 py-3 rounded-lg btn-primary text-white font-medium shadow-lg shadow-orange-500/20">+ Create Room</button>` :
-                            `<button onclick="handleWalletClick()" class="px-6 py-3 rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect Wallet to Create</button>`
-                        }
-                        <p class="text-xs text-gray-600 mt-4">Debug: ${debugInfo}</p>
+                    <div class="p-4 rounded-lg bg-white/5 text-center">
+                        <div class="text-3xl mb-2">🎯</div>
+                        <p class="text-gray-300 mb-1">No active room</p>
+                        <p class="text-gray-500 text-sm">Be the first to start a game!</p>
                     </div>
                 `;
-            }
-            
-            // 更新roomStatusBadge
-            if (playerCount > 0) {
-                document.getElementById('roomStatusBadge').textContent = playerCount + '/' + max + ' Players';
-                document.getElementById('roomStatusBadge').className = 'px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm font-medium';
-            }
-            
-            // 同步更新currentRoom区域（如果用户已在房间中）
-            if (!document.getElementById('currentRoom').classList.contains('hidden')) {
-                updateLivePlayerList();
             }
         }
 
@@ -547,68 +399,21 @@
                 toast('Connect wallet first', 'bg-red-600');
                 return;
             }
-            // 检查是否已经在房间中
-            const meInRoom = game.players.some(p => 
-                p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
-            );
-            if (meInRoom) {
-                toast('You are already in this room!', 'bg-yellow-600');
-                return;
-            }
-            
-            // 进入房间 - 显示currentRoom区域
-            document.getElementById('currentRoom').classList.remove('hidden');
-            document.getElementById('currentRoomId').textContent = 'Game Room';
-            document.getElementById('liveRoomBadge').textContent = game.players.length + '/5';
-            updateLivePlayerList();
-            
-            // 显示词语输入区域
+            // 显示游戏区域让用户提交词语
             document.getElementById('walletNotice').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
-            
-            toast('✅ Joined room! Enter a word to play.', 'bg-green-600');
+            toast('Enter a word to join the game!', 'bg-orange-500');
         }
 
-        // 创建房间
+        // 链上游戏不需要创建房间，直接提交词语即可
         function createRoom() {
             if (!wallet.connected) {
                 toast('Please connect wallet first', 'bg-red-600');
                 return;
             }
-            
-            // 进入房间 - 显示currentRoom区域
-            document.getElementById('currentRoom').classList.remove('hidden');
-            document.getElementById('currentRoomId').textContent = 'New Game';
-            document.getElementById('liveRoomBadge').textContent = '0/5';
-            updateLivePlayerList();
-            
-            // 显示词语输入区域
             document.getElementById('walletNotice').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
-            
-            toast('✅ Room created! Enter a word to start.', 'bg-green-600');
-        }
-        
-        // 更新房间内玩家列表
-        function updateLivePlayerList() {
-            const container = document.getElementById('livePlayerList');
-            if (game.players.length === 0) {
-                container.innerHTML = '<p class="text-gray-500 text-sm">Waiting for players to join...</p>';
-            } else {
-                container.innerHTML = game.players.map(p => {
-                    const isMe = wallet.connected && p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase();
-                    return `
-                    <div class="flex items-center justify-between p-2 rounded ${isMe ? 'bg-orange-500/20' : 'bg-white/5'}">
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 rounded-full ${isMe ? 'bg-orange-500/30' : 'bg-gray-700'} flex items-center justify-center text-xs">👤</span>
-                            <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
-                        </div>
-                        <span class="text-green-400 text-xs">${p.word}</span>
-                    </div>
-                    `;
-                }).join('');
-            }
-            document.getElementById('liveRoomBadge').textContent = game.players.length + '/5';
+            toast('Enter a word to start/join game!', 'bg-orange-500');
         }
 
         function leaveRoom() {
@@ -625,12 +430,9 @@
             document.getElementById('liveRoomBadge').textContent = playerCount + '/5';
         }
 
-        // 监听页面可见性变化，切回页面时刷新链上数据
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                refreshRoomList();
-                fetchLeaderboard();
-            }
+        // 监听 localStorage 变化（备用同步）
+        window.addEventListener('storage', (e) => {
+            refreshRoomList();
         });
 
         // ========== WALLET ==========
@@ -755,7 +557,7 @@
             document.getElementById('networkName').textContent = 'GenLayer';
             document.getElementById('walletDisplay').textContent = address;
             document.getElementById('walletNotice').classList.add('hidden');
-            // 注意：不自动显示gameArea，等用户点击"Create Room"或"Join"后才显示
+            document.getElementById('gameArea').classList.remove('hidden');
             
             // 显示header XP
             document.getElementById('headerXP').classList.remove('hidden');
@@ -790,29 +592,20 @@
             }
         }
 
-        // 从链上同步房间状态
+        // 
         async function syncRoomFromChain() {
             try {
-                const status = await readContract('get_game_status', []);
-                console.log('Sync room from chain:', status);
+                const status = await readContract('get', []);
+                console.log(' :', status);
                 
-                // 解析数据
-                let roomData = null;
-                if (status && typeof status === 'object') {
-                    roomData = status;
-                } else if (status && typeof status === 'string') {
-                    try { roomData = JSON.parse(status); } catch(e) {}
-                }
-                
-                if (roomData && roomData.addresses && roomData.words && roomData.addresses.length > 0) {
-                    // 构建玩家列表
+                if (status && status.addresses && status.words) {
+                    // 
                     game.players = [];
-                    let meInRoom = false;
                     
-                    for (let i = 0; i < roomData.addresses.length; i++) {
-                        const addr = roomData.addresses[i];
-                        const word = roomData.words[i];
-                        const isMe = wallet.connected && addr.toLowerCase() === wallet.address.toLowerCase();
+                    for (let i = 0; i < status.addresses.length; i++) {
+                        const addr = status.addresses[i];
+                        const word = status.words[i];
+                        const isMe = addr.toLowerCase() === wallet.address.toLowerCase();
                         
                         game.players.push({
                             addr: isMe ? wallet.short : (addr.slice(0, 6) + '...' + addr.slice(-4)),
@@ -821,31 +614,26 @@
                             fullAddr: addr
                         });
                         
-                        // 如果是自己，恢复游戏状态
+                        // 
                         if (isMe) {
-                            meInRoom = true;
                             game.word = word;
-                            game.state = 'submitted';
                             showState('submitted');
                             document.getElementById('submittedWordText').textContent = word;
-                            
-                            // 显示游戏区域
-                            document.getElementById('gameArea').classList.remove('hidden');
-                            document.getElementById('currentRoom').classList.remove('hidden');
-                            document.getElementById('currentRoomId').textContent = 'Game Room';
-                            document.getElementById('liveRoomBadge').textContent = roomData.addresses.length + '/5';
                         }
                     }
                     
                     renderRoom();
-                    updateLivePlayerList();
+                    const syncNeeded = Math.max(0, 5 - game.players.length);
+                    document.getElementById('playersNeeded').textContent = syncNeeded;
+                    document.getElementById('waitingCount').textContent = syncNeeded;
                     
-                    const syncNeeded = Math.max(0, GAME_CONFIG.minPlayers - game.players.length);
-                    document.getElementById('playersNeeded').textContent = syncNeeded > 0 ? syncNeeded : 'Ready';
-                    document.getElementById('waitingCount').textContent = syncNeeded > 0 ? syncNeeded : 'Ready';
+                    // 
+                    if (game.players.length > 0 && !game.players.some(p => p.fullAddr?.toLowerCase() === wallet.address.toLowerCase())) {
+                        startPolling();
+                    }
                     
-                    // 如果用户在房间中，启动计时
-                    if (meInRoom) {
+                    // 
+                    if (game.state === 'submitted') {
                         startCountdown();
                         startPolling();
                     }
@@ -911,7 +699,7 @@
 
             try {
                 // 发送到链上
-                const txResult = await callContract('submit_word', [w]);
+                const txResult = await callContract('add', [w]);
                 
                 if (txResult.success && txResult.hash) {
                     game.word = w;
@@ -930,9 +718,9 @@
                     wordInput.value = '';
                     
                     // 更新人数显示
-                    const needed = GAME_CONFIG.minPlayers - game.players.length;
-                    document.getElementById('playersNeeded').textContent = needed > 0 ? needed : 'Ready';
-                    document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
+                    const needed = 5 - game.players.length;
+                    document.getElementById('playersNeeded').textContent = needed > 0 ? needed : 0;
+                    document.getElementById('waitingCount').textContent = needed > 0 ? needed : 0;
                     
                     showState('submitted');
                     toast('Submitted! TX: ' + txResult.hash.slice(0, 10) + '...', 'bg-green-600');
@@ -940,12 +728,9 @@
                     submitBtn.textContent = 'Submitted ✓';
                     submitBtn.disabled = true;
                     
-                    // 启动房间计时器
+                    // 启动60秒AI补位计时器
                     startCountdown();
                     startAITimeout();
-                    
-                    // 更新房间内玩家列表
-                    updateLivePlayerList();
                     
                     // 刷新房间列表
                     setTimeout(() => refreshRoomList(), 2000);
@@ -1008,10 +793,9 @@
         //  -  MetaMask 
         async function callContract(method, args) {
             try {
-                // 使用 msgpack 编码 calldata（原始格式）
-                const calldata = { method: method, args: args };
-                const encoded = msgpack.encode(calldata);
-                const hexData = bytesToHex(encoded);
+                const callData = JSON.stringify({ method: method, args: args });
+                const hexData = '0x' + Array.from(new TextEncoder().encode(callData))
+                    .map(b => b.toString(16).padStart(2, '0')).join('');
 
                 console.log('Sending TX to GenLayer:', { method, args, hexData });
 
@@ -1036,36 +820,11 @@
             }
         }
 
-        // 将字节数组转换为十六进制字符串
-        function bytesToHex(bytes) {
-            return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-        
-        // 将十六进制字符串转换为字节数组
-        function hexToBytes(hex) {
-            if (hex.startsWith('0x')) hex = hex.slice(2);
-            const bytes = [];
-            for (let i = 0; i < hex.length; i += 2) {
-                bytes.push(parseInt(hex.substr(i, 2), 16));
-            }
-            return new Uint8Array(bytes);
-        }
-
         // 读取合约 - 使用 GenLayer gen_call API
         async function readContract(method, args = []) {
             try {
-                // 使用 msgpack 编码 calldata
-                const calldata = { method: method, args: args };
-                const encoded = msgpack.encode(calldata);
-                const dataHex = bytesToHex(encoded);
-                
-                console.log('Calling contract:', { method, args, dataHex });
-                
-                // Vercel部署时使用代理，本地直连
-                const isDeployed = !['localhost', '127.0.0.1'].includes(window.location.hostname);
-                const rpcUrl = isDeployed ? '/api/rpc' : CONTRACT.rpcUrl;
-                
-                const response = await fetch(rpcUrl, {
+                // 方法1: 尝试直接 JSON 格式
+                const response = await fetch('https://studio.genlayer.com/api', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1074,7 +833,7 @@
                         params: [{
                             from: '0x0000000000000000000000000000000000000000',
                             to: CONTRACT.address,
-                            data: dataHex,
+                            data: JSON.stringify({ method: method, args: args }),
                             type: 'read'
                         }],
                         id: Date.now()
@@ -1091,35 +850,15 @@
                 
                 if (result.result) {
                     let data = result.result;
-                    
-                    // 如果是十六进制字符串，尝试 msgpack 解码
-                    if (typeof data === 'string' && data.startsWith('0x')) {
-                        try {
-                            const bytes = hexToBytes(data);
-                            data = msgpack.decode(bytes);
-                            console.log('Msgpack decoded:', data);
-                        } catch (e) {
-                            console.log('Msgpack decode failed, trying JSON:', e);
-                            // 尝试作为普通字符串处理
-                            data = data.slice(2); // 去掉 0x
-                            const textBytes = hexToBytes('0x' + data);
-                            try {
-                                const text = new TextDecoder().decode(textBytes);
-                                if (text.includes('{')) {
-                                    data = JSON.parse(text);
-                                } else {
-                                    data = text;
-                                }
-                            } catch (e2) {
-                                console.log('Text decode failed:', e2);
-                            }
-                        }
-                    } else if (typeof data === 'string') {
-                        // 尝试 JSON 解析
+                    // 如果是字符串，尝试解析
+                    if (typeof data === 'string') {
+                        // 去掉可能的引号
                         if (data.startsWith('"') && data.endsWith('"')) {
                             data = data.slice(1, -1);
                         }
+                        // 解码转义字符
                         data = data.replace(/\\"/g, '"');
+                        // 解析 JSON
                         if (data.includes('{')) {
                             try {
                                 data = JSON.parse(data);
@@ -1197,10 +936,74 @@
             }
         }
 
-        // ========== 游戏状态检查（手动刷新，不使用轮询）==========
+        // ==========  - 3 ==========
         function startPolling() {
-            // 不再使用轮询，改为手动刷新
-            console.log('Polling disabled - use manual refresh');
+            stopPolling();
+            console.log(' ...');
+            
+            game.pollingInterval = setInterval(async () => {
+                try {
+                    // 
+                    const status = await readContract('get', []);
+                    console.log(' :', status);
+                    
+                    if (status && status.addresses) {
+                        const chainCount = status.addresses.length;
+                        
+                        // AI
+                        for (let i = 0; i < chainCount; i++) {
+                            const addr = status.addresses[i];
+                            const word = status.words[i];
+                            const exists = game.players.some(p => 
+                                p.fullAddr?.toLowerCase() === addr.toLowerCase()
+                            );
+                            
+                            if (!exists) {
+                                const isMe = addr.toLowerCase() === wallet.address.toLowerCase();
+                                game.players.push({
+                                    addr: isMe ? wallet.short : (addr.slice(0, 6) + '...' + addr.slice(-4)),
+                                    word: word,
+                                    ai: false,
+                                    fullAddr: addr
+                                });
+                                toast(' !', 'bg-cyan-600');
+                            }
+                        }
+                        
+                        renderRoom();
+                        const currentNeeded = Math.max(0, 5 - game.players.length);
+                        document.getElementById('playersNeeded').textContent = currentNeeded;
+                        document.getElementById('waitingCount').textContent = currentNeeded;
+                        
+                        // 0
+                        if (chainCount === 0 && game.state === 'submitted') {
+                            console.log(' !');
+                            stopPolling();
+                            stopCountdown();
+                            stopAITimeout();
+                            
+                            await fetchLeaderboard();
+                            await fetchHistory();
+                            
+                            toast(' ', 'bg-green-600');
+                            switchPage('leaderboard');
+                            startNewRound();
+                        }
+                        
+                        // 5
+                        if (chainCount >= 5 && game.state === 'submitted') {
+                            console.log(' AI...');
+                            stopPolling();
+                            stopCountdown();
+                            stopAITimeout();
+                            showState('settling');
+                            toast(' 5AI...', 'bg-orange-500');
+                        }
+                    }
+                } catch (err) {
+                    console.error(':', err);
+                }
+            }, 3000);
         }
 
         function stopPolling() {
@@ -1209,85 +1012,26 @@
                 game.pollingInterval = null;
             }
         }
-        
-        // 检查游戏状态（手动调用）
-        async function checkGameStatus() {
-            try {
-                const status = await readContract('get_game_status', []);
-                console.log('Game status:', status);
-                
-                // 解析数据
-                let roomData = null;
-                if (status && typeof status === 'object') {
-                    roomData = status;
-                } else if (status && typeof status === 'string') {
-                    try { roomData = JSON.parse(status); } catch(e) {}
-                }
-                
-                if (roomData && roomData.addresses) {
-                    const chainCount = roomData.addresses.length;
-                    
-                    // 房间清空 = 游戏已结算
-                    if (chainCount === 0 && game.state === 'submitted') {
-                        console.log('Room cleared - game settled!');
-                        stopCountdown();
-                        stopAITimeout();
-                        
-                        await fetchLeaderboard();
-                        toast('🏁 Game settled! Check leaderboard.', 'bg-green-600');
-                        switchPage('leaderboard');
-                        startNewRound();
-                        return;
-                    }
-                    
-                    // 房间满员
-                    if (chainCount >= GAME_CONFIG.maxPlayers && game.state === 'submitted') {
-                        console.log('Room full - game starting!');
-                        stopCountdown();
-                        stopAITimeout();
-                        showState('settling');
-                        toast('🎮 Room full! Game starting...', 'bg-orange-500');
-                        
-                        // 3秒后显示结果
-                        setTimeout(async () => {
-                            await fetchLeaderboard();
-                            showGameResult();
-                        }, 3000);
-                        return;
-                    }
-                    
-                    // 更新玩家列表
-                    await refreshRoomList();
-                }
-            } catch (err) {
-                console.error('Check game status error:', err);
-            }
-        }
 
-        // ========== AI补位系统 ==========
+        // ========== 30AI ==========
         function startAITimeout() {
             stopAITimeout();
-            const aiDelay = GAME_CONFIG.aiDelay * 1000; // 3分钟
-            console.log('AI timeout started: ' + GAME_CONFIG.aiDelay + 's');
+            console.log('60s AI timeout started...');
             
             game.aiTimeout = setTimeout(() => {
                 if (game.state !== 'submitted') return;
                 
-                console.log('Timeout reached, AI filling...');
-                toast('⏰ Time up! AI players joining...', 'bg-yellow-600');
+                console.log('60s timeout, AI filling...');
+                toast('Timeout! AI joining...', 'bg-yellow-600');
                 
                 const fillAI = setInterval(() => {
-                    if (game.players.length >= GAME_CONFIG.maxPlayers || game.state !== 'submitted') {
+                    if (game.players.length >= 5 || game.state !== 'submitted') {
                         clearInterval(fillAI);
-                        // 至少2人就开始游戏
-                        if (game.players.length >= GAME_CONFIG.minPlayers) {
-                            checkGameStart();
-                        }
                         return;
                     }
                     addAI();
-                }, 1500);
-            }, aiDelay);
+                }, 1000);
+            }, 60000);
         }
 
         function stopAITimeout() {
@@ -1299,23 +1043,20 @@
 
         function startCountdown() {
             game.lastTime = Date.now();
-            game.roomStartTime = Date.now();
-            game.countdown = GAME_CONFIG.roomDuration; // 5分钟
+            game.countdown = 60;
             updateCountdown();
             
             if (game.interval) clearInterval(game.interval);
             game.interval = setInterval(() => {
-                if (game.state === 'settling' || game.state === 'result') {
+                if (game.players.length >= 5 || game.state === 'settling' || game.state === 'result') {
                     stopCountdown();
                     return;
                 }
                 const elapsed = Math.floor((Date.now() - game.lastTime) / 1000);
-                game.countdown = Math.max(0, GAME_CONFIG.roomDuration - elapsed);
+                game.countdown = Math.max(0, 60 - elapsed);
                 updateCountdown();
-                
-                // 房间时间到，自动结算
-                if (game.countdown <= 0 && game.players.length >= GAME_CONFIG.minPlayers) {
-                    checkGameStart();
+                if (game.countdown <= 0) {
+                    addAI();
                     game.lastTime = Date.now();
                     game.countdown = 15;
                 }
@@ -1329,57 +1070,29 @@
         }
 
         function updateCountdown() {
-            const show = game.countdown !== null && game.players.length > 0 && game.players.length < GAME_CONFIG.maxPlayers;
+            const show = game.countdown !== null && game.players.length > 0 && game.players.length < 5;
+            document.getElementById('countdownBadge').classList.toggle('hidden', !show);
+            document.getElementById('countdownNum').textContent = game.countdown || 60;
+            document.getElementById('countdownText').classList.toggle('hidden', !show || game.state !== 'submitted');
+            document.getElementById('countdownNum2').textContent = game.countdown || 60;
+            document.getElementById('roomCountdown').classList.toggle('hidden', !show);
+            document.getElementById('roomCountdown').textContent = ' ' + (game.countdown || 60) + 's AI';
             
-            // 格式化时间显示
-            const mins = Math.floor((game.countdown || 0) / 60);
-            const secs = (game.countdown || 0) % 60;
-            const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-            
-            // 安全地更新元素（添加空值检查）
-            const countdownBadge = document.getElementById('countdownBadge');
-            const countdownNum = document.getElementById('countdownNum');
-            const countdownText = document.getElementById('countdownText');
-            const countdownNum2 = document.getElementById('countdownNum2');
-            const roomCountdown = document.getElementById('roomCountdown');
-            
-            if (countdownBadge) countdownBadge.classList.toggle('hidden', !show);
-            if (countdownNum) countdownNum.textContent = timeStr;
-            if (countdownText) countdownText.classList.toggle('hidden', !show || game.state !== 'submitted');
-            if (countdownNum2) countdownNum2.textContent = timeStr;
-            if (roomCountdown) {
-                roomCountdown.classList.toggle('hidden', !show);
-                roomCountdown.textContent = '⏱️ ' + timeStr;
-            }
-            
-            // 更新等待人数
+            // 
             const waitingEl = document.getElementById('waitingCount');
             if (waitingEl) {
-                const needed = Math.max(0, GAME_CONFIG.minPlayers - game.players.length);
-                waitingEl.textContent = needed > 0 ? needed : 'Ready!';
-            }
-        }
-        
-        function checkGameStart() {
-            if (game.players.length >= GAME_CONFIG.minPlayers && !isSettling && game.state !== 'settling' && game.state !== 'result') {
-                isSettling = true;
-                if (globalPollingInterval) {
-                    clearInterval(globalPollingInterval);
-                    globalPollingInterval = null;
-                }
-                toast('🎮 Game starting with ' + game.players.length + ' players!', 'bg-green-600');
-                setTimeout(() => settle(), 2000);
+                waitingEl.textContent = Math.max(0, 5 - game.players.length);
             }
         }
 
         function addAI() {
-            if (game.players.length >= GAME_CONFIG.maxPlayers) return;
+            if (game.players.length >= 5) return;
             if (game.txPending) return;
             
             const usedNames = game.players.filter(p => p.ai).map(p => p.addr);
             const name = AI_NAMES.find(n => !usedNames.includes(n)) || 'Bot-X';
             const usedWords = game.players.map(p => p.word);
-            const word = AI_WORDS.find(w => !usedWords.includes(w)) || game.theme.keywords[0];
+            const word = AI_WORDS.find(w => !usedWords.includes(w)) || 'chain';
             
             // AI
             game.players.push({ addr: name, word: word, ai: true });
@@ -1389,14 +1102,10 @@
         }
 
         function checkFull() {
-            const currentNeeded = Math.max(0, GAME_CONFIG.minPlayers - game.players.length);
-            document.getElementById('playersNeeded').textContent = currentNeeded > 0 ? currentNeeded : 'Ready';
-            document.getElementById('waitingCount').textContent = currentNeeded > 0 ? currentNeeded : 'Ready';
-            
-            // 至少minPlayers人或达到maxPlayers就开始
-            if ((game.players.length >= GAME_CONFIG.maxPlayers || 
-                (game.players.length >= GAME_CONFIG.minPlayers && game.countdown <= 0)) && 
-                !isSettling && game.state !== 'settling' && game.state !== 'result') {
+            const currentNeeded = Math.max(0, 5 - game.players.length);
+            document.getElementById('playersNeeded').textContent = currentNeeded;
+            document.getElementById('waitingCount').textContent = currentNeeded;
+            if (game.players.length >= 5 && !isSettling && game.state !== 'settling' && game.state !== 'result') {
                 isSettling = true;
                 stopCountdown();
                 settle();
@@ -1417,48 +1126,19 @@
             showState('settling');
             
             setTimeout(() => {
-                // 计算词语相似度得分（简单版本：相同词加分）
-                const wordCounts = {};
-                game.players.forEach(p => {
-                    wordCounts[p.word] = (wordCounts[p.word] || 0) + 1;
-                });
-                
-                // 找出匹配的词（出现次数>1）
-                const matchedWords = Object.keys(wordCounts).filter(w => wordCounts[w] > 1);
-                
-                // 计算每个玩家的得分
-                const result = game.players.map(p => {
-                    const isMatched = matchedWords.includes(p.word);
-                    const matchCount = wordCounts[p.word] || 1;
-                    let xp = GAME_CONFIG.xpParticipant; // 基础参与奖励
-                    
-                    if (isMatched) {
-                        xp += GAME_CONFIG.xpBonus * (matchCount - 1); // 匹配奖励
-                    }
-                    
-                    return {
-                        ...p,
-                        win: isMatched,
-                        matchCount: matchCount,
-                        xp: xp
-                    };
-                });
-                
-                // 找出得分最高的作为冠军
-                const maxXP = Math.max(...result.map(r => r.xp));
-                result.forEach(r => {
-                    if (r.xp === maxXP && r.xp > GAME_CONFIG.xpParticipant) {
-                        r.champion = true;
-                        r.xp += GAME_CONFIG.xpWinner - GAME_CONFIG.xpBonus; // 额外冠军奖励
-                    }
-                });
+                const shuffled = [...game.players].sort(() => Math.random() - 0.5);
+                const winners = shuffled.slice(0, Math.random() > 0.5 ? 2 : 1);
+                const result = game.players.map(p => ({
+                    ...p,
+                    win: winners.some(w => w.addr === p.addr),
+                    xp: winners.some(w => w.addr === p.addr) ? 50 : 10
+                }));
 
                 history.unshift({
                     id: history.length + 1,
-                    theme: game.theme.name,
-                    winners: result.filter(r => r.win).map(w => w.addr),
-                    words: game.players.map(p => p.word),
-                    matchedWords: matchedWords
+                    theme: 'blockchain',
+                    winners: winners.map(w => w.addr),
+                    words: game.players.map(p => p.word)
                 });
                 saveHistory();
                 renderHistory();
@@ -1483,22 +1163,20 @@
                 saveLeaderboard();
                 renderLeaderboard();
 
-                const userResult = result.find(r => r.addr === wallet.short || (r.fullAddr && r.fullAddr.toLowerCase() === wallet.address?.toLowerCase()));
-                const userWon = userResult && userResult.win;
-                document.getElementById('resultTitle').textContent = userWon ? '🎉 Words Matched!' : '🏁 Game Over!';
-                document.getElementById('resultTheme').textContent = game.theme.name + (matchedWords.length > 0 ? ' | Matched: ' + matchedWords.join(', ') : '');
+                const userWon = winners.some(w => w.addr === wallet.short || (w.fullAddr && w.fullAddr.toLowerCase() === wallet.address?.toLowerCase()));
+                document.getElementById('resultTitle').textContent = userWon ? '🎉 You Won!' : '🏁 Game Over!';
+                document.getElementById('resultTheme').textContent = 'blockchain technology';
                 document.getElementById('resultList').innerHTML = result.map(p => {
                     const isMe = p.addr === wallet.short || (p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase());
                     return `
-                    <div class="flex items-center justify-between p-3 rounded-lg ${p.champion ? 'bg-yellow-500/10 border border-yellow-500/30' : p.win ? 'bg-green-500/10 border border-green-500/30' : 'bg-white/5'}">
+                    <div class="flex items-center justify-between p-3 rounded-lg ${p.win ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-white/5'}">
                         <div class="flex items-center gap-2">
-                            <span class="text-lg">${p.champion ? '🏆' : p.win ? '✨' : '👤'}</span>
+                            <span class="text-lg">${p.win ? '🏆' : '👤'}</span>
                             <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
                             ${p.ai ? '<span class="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
                             <span class="text-xs text-gray-500">"${p.word}"</span>
-                            ${p.matchCount > 1 ? `<span class="px-1.5 py-0.5 text-xs rounded bg-green-500/20 text-green-400">×${p.matchCount}</span>` : ''}
                         </div>
-                        <span class="font-bold ${p.champion ? 'text-yellow-400' : p.win ? 'text-green-400' : 'text-gray-400'}">+${p.xp} XP</span>
+                        <span class="font-bold ${p.win ? 'text-yellow-400' : 'text-gray-400'}">${p.win ? '🥇 ' : ''}+${p.xp} XP</span>
                     </div>
                 `}).join('');
 
@@ -1527,6 +1205,9 @@
             isSettling = false;
             game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
             
+            // 清空房间状态
+            localStorage.removeItem('genlayer_room');
+            
             // 重置按钮
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = false;
@@ -1546,24 +1227,18 @@
         // ========== RENDER ==========
         function renderRoom() {
             const n = game.players.length;
-            const max = GAME_CONFIG.maxPlayers;
-            document.getElementById('roomBadge').textContent = n + '/' + max;
-            document.getElementById('roomBadge').className = 'px-2 py-0.5 text-xs rounded-full ' + (n >= GAME_CONFIG.minPlayers ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400');
-            document.getElementById('roomProgress').style.width = (n / max * 100) + '%';
+            document.getElementById('roomBadge').textContent = n + '/5';
+            document.getElementById('roomBadge').className = 'px-2 py-0.5 text-xs rounded-full ' + (n >= 5 ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400');
+            document.getElementById('roomProgress').style.width = (n / 5 * 100) + '%';
 
             let html = game.players.map(p => {
                 const isMe = p.addr === wallet.short;
-                const cls = p.ai ? 'border-blue-400/30 bg-blue-400/10' : isMe ? 'border-green-500/30 bg-green-500/10' : 'border-orange-500/30 bg-orange-500/10';
-                return `<span class="px-3 py-1.5 rounded-full border text-xs ${cls}">${p.ai ? '🤖 ' : ''}${isMe ? 'You' : p.addr}: <span class="text-orange-400">${p.word}</span></span>`;
+                const cls = p.ai ? 'border-orange-400/30 bg-orange-400/10' : isMe ? 'border-green-500/30 bg-green-500/10' : 'border-orange-500/30 bg-orange-500/10';
+                return `<span class="px-3 py-1.5 rounded-full border text-xs ${cls}">${p.ai ? ' ' : ''}${isMe ? 'You' : p.addr}: <span class="text-orange-400">${p.word}</span></span>`;
             }).join('');
 
-            // 只显示几个空位
-            const emptySlots = Math.min(3, max - n);
-            for (let i = 0; i < emptySlots; i++) {
+            for (let i = n; i < 5; i++) {
                 html += '<span class="px-3 py-1.5 rounded-full border border-dashed border-[#1a1a1a] text-xs text-gray-500">Empty</span>';
-            }
-            if (max - n > 3) {
-                html += `<span class="px-3 py-1.5 text-xs text-gray-500">+${max - n - 3} more</span>`;
             }
             document.getElementById('playerSlots').innerHTML = html;
         }
