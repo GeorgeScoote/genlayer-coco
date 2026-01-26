@@ -1034,10 +1034,10 @@
         //  -  MetaMask 
         async function callContract(method, args) {
             try {
-                // 使用 GenLayer 自定义编码格式
+                // 使用 GenLayer 自定义编码格式 (write方法)
                 // args[0] 是 word 参数
                 const argsObj = args && args.length > 0 ? { word: args[0] } : {};
-                const hexData = encodeGenLayerCall(method, argsObj);
+                const hexData = encodeGenLayerCall(method, argsObj, true);
 
                 console.log('Sending TX to GenLayer:', { method, args, hexData });
 
@@ -1078,26 +1078,22 @@
         }
         
         // GenLayer calldata 编码函数
-        function encodeGenLayerCall(methodName, args = {}) {
-            // 格式: 0xda 98 <method_name_len - 1> 06 + "method|<method_name>" + ["|arg_name|arg_value"]... + "\x00"
-            let body = `method|${methodName}`;
+        function encodeGenLayerCall(methodName, args = {}, isWrite = false) {
+            let header, body;
             
-            // 添加参数
-            if (args && typeof args === 'object') {
-                for (const [name, value] of Object.entries(args)) {
-                    body += `|${name}|${value}`;
-                }
+            if (!isWrite || Object.keys(args).length === 0) {
+                // Read方法 (无参数): da 98 <method_len-1> 06 + "method|<method_name>\0"
+                header = new Uint8Array([0xda, 0x98, methodName.length - 1, 6]);
+                body = `method|${methodName}\x00`;
+            } else {
+                // Write方法 (有参数): e1 9f <method_len + arg_len + 7> 04 + "args\r$<value>\x06method\<method_name>\0"
+                const argValue = Object.values(args)[0] || '';
+                const lenByte = methodName.length + argValue.length + 7;
+                header = new Uint8Array([0xe1, 0x9f, lenByte, 4]);
+                body = `args\r$${argValue}\x06method\\${methodName}\x00`;
             }
-            body += '\x00';
             
-            // 构建header: da 98 <method_name_len - 1> 06
-            const methodLen = 6; // "method" 长度始终为6
-            const header = new Uint8Array([0xda, 0x98, methodName.length - 1, methodLen]);
-            
-            // 编码body为UTF-8
             const bodyBytes = new TextEncoder().encode(body);
-            
-            // 合并
             const full = new Uint8Array(header.length + bodyBytes.length);
             full.set(header, 0);
             full.set(bodyBytes, header.length);
@@ -1108,8 +1104,8 @@
         // 读取合约 - 使用 GenLayer gen_call API
         async function readContract(method, args = []) {
             try {
-                // 使用 GenLayer 自定义编码格式
-                const dataHex = encodeGenLayerCall(method, {});
+                // 使用 GenLayer 自定义编码格式 (read方法)
+                const dataHex = encodeGenLayerCall(method, {}, false);
                 
                 console.log('Calling contract:', { method, dataHex });
                 
