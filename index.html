@@ -262,7 +262,7 @@
     <script>
         // ========== CONTRACT CONFIG ==========
         const CONTRACT = {
-            address: '0x8443995060C9dd4bBE97A9e7e39F4E73c43cCb19',
+            address: '0xF7201Bb19FE8203767fa5F02c37EA8a0C84AcaBa',
             rpcUrl: 'https://studio.genlayer.com/api',
             chainId: 61983
         };
@@ -385,7 +385,7 @@
             
             console.log('=== refreshRoomList START ===');
             
-            // 从链上读取房间状态
+            // 从链上读取房间状态 (SimpleGame 用 get_status)
             const status = await readContract('get_game_status', []);
             console.log('Chain room status:', status);
             console.log('Status type:', typeof status);
@@ -393,34 +393,44 @@
             
             const container = document.getElementById('roomListContent');
             
-            // 解析合约返回的数据
-            // 合约返回: {"players": N, "addresses": ["0x..."], "words": ["word1"]}
+            // 解析 ConsensusChallenge 返回的数据
+            // 返回格式: {"players": N, "addresses": ["0x..."], "words": ["word1"]}
             let roomData = null;
+            
             if (status && typeof status === 'object') {
-                roomData = status;
-                console.log('Using status as object');
+                // 直接使用返回的对象
+                if (status.addresses !== undefined) {
+                    roomData = status;
+                } else {
+                    // SimpleGame兼容: {"address": "word"} 格式
+                    const addresses = Object.keys(status);
+                    const words = Object.values(status);
+                    roomData = { players: addresses.length, addresses, words };
+                }
             } else if (status && typeof status === 'string') {
                 try { 
-                    roomData = JSON.parse(status); 
-                    console.log('Parsed status from string');
+                    const parsed = JSON.parse(status);
+                    if (parsed.addresses !== undefined) {
+                        roomData = parsed;
+                    } else {
+                        const addresses = Object.keys(parsed);
+                        const words = Object.values(parsed);
+                        roomData = { players: addresses.length, addresses, words };
+                    }
                 } catch(e) {
-                    console.log('Failed to parse status string:', e);
+                    console.log('Failed to parse status:', e);
                 }
-            } else {
-                console.log('Status is null/undefined or unexpected type');
             }
             
-            console.log('roomData:', roomData);
-            console.log('roomData.addresses:', roomData?.addresses);
-            console.log('roomData.words:', roomData?.words);
+            console.log('Parsed roomData:', roomData);
             
             // 构建玩家列表
             if (game.state !== 'submitted' && game.state !== 'settling') {
-                if (roomData && roomData.addresses && roomData.words && roomData.addresses.length > 0) {
+                if (roomData && roomData.addresses && roomData.addresses.length > 0) {
                     game.players = roomData.addresses.map((addr, i) => ({
                         addr: addr.slice(0, 6) + '...' + addr.slice(-4),
                         fullAddr: addr,
-                        word: roomData.words[i] || '',
+                        word: roomData.words ? (roomData.words[i] || '') : '',
                         ai: false
                     }));
                     console.log('Built players from chain:', game.players.length);
@@ -796,22 +806,38 @@
                 const status = await readContract('get_game_status', []);
                 console.log('Sync room from chain:', status);
                 
-                // 解析数据
+                // 解析 ConsensusChallenge 数据 - 格式是 {"players": N, "addresses": [], "words": []}
                 let roomData = null;
                 if (status && typeof status === 'object') {
-                    roomData = status;
+                    if (status.addresses !== undefined) {
+                        roomData = status;
+                    } else {
+                        // SimpleGame兼容
+                        const addresses = Object.keys(status);
+                        const words = Object.values(status);
+                        roomData = { players: addresses.length, addresses, words };
+                    }
                 } else if (status && typeof status === 'string') {
-                    try { roomData = JSON.parse(status); } catch(e) {}
+                    try { 
+                        const parsed = JSON.parse(status);
+                        if (parsed.addresses !== undefined) {
+                            roomData = parsed;
+                        } else {
+                            const addresses = Object.keys(parsed);
+                            const words = Object.values(parsed);
+                            roomData = { players: addresses.length, addresses, words };
+                        }
+                    } catch(e) {}
                 }
                 
-                if (roomData && roomData.addresses && roomData.words && roomData.addresses.length > 0) {
-                    // 构建玩家列表
+                // 构建玩家列表
+                if (roomData && roomData.addresses && roomData.addresses.length > 0) {
                     game.players = [];
                     let meInRoom = false;
                     
                     for (let i = 0; i < roomData.addresses.length; i++) {
                         const addr = roomData.addresses[i];
-                        const word = roomData.words[i];
+                        const word = roomData.words ? roomData.words[i] : '';
                         const isMe = wallet.connected && addr.toLowerCase() === wallet.address.toLowerCase();
                         
                         game.players.push({
@@ -1008,10 +1034,10 @@
         //  -  MetaMask 
         async function callContract(method, args) {
             try {
-                // 使用 msgpack 编码 calldata（原始格式）
-                const calldata = { method: method, args: args };
-                const encoded = msgpack.encode(calldata);
-                const hexData = bytesToHex(encoded);
+                // 使用 GenLayer 自定义编码格式
+                // args[0] 是 word 参数
+                const argsObj = args && args.length > 0 ? { word: args[0] } : {};
+                const hexData = encodeGenLayerCall(method, argsObj);
 
                 console.log('Sending TX to GenLayer:', { method, args, hexData });
 
@@ -1050,16 +1076,42 @@
             }
             return new Uint8Array(bytes);
         }
+        
+        // GenLayer calldata 编码函数
+        function encodeGenLayerCall(methodName, args = {}) {
+            // 格式: 0xda 98 <method_name_len - 1> 06 + "method|<method_name>" + ["|arg_name|arg_value"]... + "\x00"
+            let body = `method|${methodName}`;
+            
+            // 添加参数
+            if (args && typeof args === 'object') {
+                for (const [name, value] of Object.entries(args)) {
+                    body += `|${name}|${value}`;
+                }
+            }
+            body += '\x00';
+            
+            // 构建header: da 98 <method_name_len - 1> 06
+            const methodLen = 6; // "method" 长度始终为6
+            const header = new Uint8Array([0xda, 0x98, methodName.length - 1, methodLen]);
+            
+            // 编码body为UTF-8
+            const bodyBytes = new TextEncoder().encode(body);
+            
+            // 合并
+            const full = new Uint8Array(header.length + bodyBytes.length);
+            full.set(header, 0);
+            full.set(bodyBytes, header.length);
+            
+            return bytesToHex(full);
+        }
 
         // 读取合约 - 使用 GenLayer gen_call API
         async function readContract(method, args = []) {
             try {
-                // 使用 msgpack 编码 calldata
-                const calldata = { method: method, args: args };
-                const encoded = msgpack.encode(calldata);
-                const dataHex = bytesToHex(encoded);
+                // 使用 GenLayer 自定义编码格式
+                const dataHex = encodeGenLayerCall(method, {});
                 
-                console.log('Calling contract:', { method, args, dataHex });
+                console.log('Calling contract:', { method, dataHex });
                 
                 // Vercel部署时使用代理，本地直连
                 const isDeployed = !['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -1145,8 +1197,15 @@
                 const data = await readContract('get_leaderboard', []);
                 console.log('Leaderboard data:', data);
                 
-                if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-                    leaderboard = Object.entries(data)
+                let boardData = null;
+                if (data && typeof data === 'object') {
+                    boardData = data;
+                } else if (data && typeof data === 'string') {
+                    try { boardData = JSON.parse(data); } catch(e) {}
+                }
+                
+                if (boardData && typeof boardData === 'object' && Object.keys(boardData).length > 0) {
+                    leaderboard = Object.entries(boardData)
                         .map(([addr, xp]) => ({ 
                             addr: addr.slice(0, 6) + '...' + addr.slice(-4), 
                             fullAddr: addr,
@@ -1169,7 +1228,8 @@
                         document.getElementById('userXP').textContent = me ? me.xp : 0;
                     }
                 } else {
-                    // 无数据
+                    leaderboard = [];
+                    renderLeaderboard();
                     if (wallet.connected) {
                         document.getElementById('userXP').textContent = '0';
                         document.getElementById('userRank').textContent = '-';
@@ -1216,17 +1276,32 @@
                 const status = await readContract('get_game_status', []);
                 console.log('Game status:', status);
                 
-                // 解析数据
+                // 解析 ConsensusChallenge 数据
                 let roomData = null;
                 if (status && typeof status === 'object') {
-                    roomData = status;
+                    if (status.addresses !== undefined) {
+                        roomData = status;
+                    } else {
+                        const addresses = Object.keys(status);
+                        const words = Object.values(status);
+                        roomData = { players: addresses.length, addresses, words };
+                    }
                 } else if (status && typeof status === 'string') {
-                    try { roomData = JSON.parse(status); } catch(e) {}
+                    try { 
+                        const parsed = JSON.parse(status);
+                        if (parsed.addresses !== undefined) {
+                            roomData = parsed;
+                        } else {
+                            const addresses = Object.keys(parsed);
+                            const words = Object.values(parsed);
+                            roomData = { players: addresses.length, addresses, words };
+                        }
+                    } catch(e) {}
                 }
                 
-                if (roomData && roomData.addresses) {
-                    const chainCount = roomData.addresses.length;
-                    
+                const chainCount = roomData ? roomData.addresses.length : 0;
+                
+                if (roomData) {
                     // 房间清空 = 游戏已结算
                     if (chainCount === 0 && game.state === 'submitted') {
                         console.log('Room cleared - game settled!');
