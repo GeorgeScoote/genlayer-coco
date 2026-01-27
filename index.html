@@ -511,19 +511,9 @@
                 return;
             }
             
-            // 检查本地是否已提交过
+            // 只检查本地是否已提交过（不检查Firebase数据，因为可能是上一轮残留）
             if (game.word) {
                 toast('You already submitted a word!', 'bg-yellow-600');
-                return;
-            }
-            
-            // 检查是否已在房间
-            const meInRoom = game.players.some(p => 
-                p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
-            );
-            
-            if (meInRoom) {
-                toast('You are already in the room!', 'bg-yellow-600');
                 return;
             }
             
@@ -1794,7 +1784,7 @@
             stopAITimeout();
             
             isSettling = false;
-            game = { state: 'idle', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
+            game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
             
             // 重置按钮
             const submitBtn = document.getElementById('submitBtn');
@@ -1807,7 +1797,6 @@
             document.getElementById('gameArea').classList.add('hidden');
             document.getElementById('currentRoom').classList.add('hidden');
             
-            showState('input');
             renderRoom();
             
             document.getElementById('playersNeeded').textContent = '4';
