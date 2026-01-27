@@ -246,14 +246,6 @@
             </div>
         </div>
 
-        <!-- Contract Info -->
-        <div class="mt-8 text-center p-4 rounded-lg bg-white/5">
-            <p class="text-gray-500 text-xs mb-2">🔗 Smart Contract (GenLayer Testnet)</p>
-            <a href="https://studio.genlayer.com" target="_blank" 
-               class="text-orange-400 hover:text-orange-300 text-xs font-mono transition">
-                0x8443995060C9dd4bBE97A9e7e39F4E73c43cCb19
-            </a>
-        </div>
     </main>
 
     <footer class="text-center py-6 text-gray-600 text-xs">
@@ -409,8 +401,8 @@
             document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
             
             if (playerCount > 0) {
-                // 检查当前用户是否已在房间中
-                const meInRoom = wallet.connected && players.some(p => 
+                // 检查当前用户是否已在房间中（必须本地也有word才算真正加入）
+                const meInRoom = wallet.connected && game.word && players.some(p => 
                     p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
                 );
                 
@@ -499,6 +491,12 @@
                 return;
             }
             
+            // 检查本地是否已提交过
+            if (game.word) {
+                toast('You already submitted a word!', 'bg-yellow-600');
+                return;
+            }
+            
             // 显示输入界面
             document.getElementById('gameArea').classList.remove('hidden');
             document.getElementById('currentRoom').classList.remove('hidden');
@@ -510,6 +508,12 @@
         async function joinFirebaseRoom() {
             if (!wallet.connected) {
                 toast('Connect wallet first', 'bg-red-600');
+                return;
+            }
+            
+            // 检查本地是否已提交过
+            if (game.word) {
+                toast('You already submitted a word!', 'bg-yellow-600');
                 return;
             }
             
@@ -687,8 +691,8 @@
                 document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
                 
                 if (playerCount > 0) {
-                    // 检查当前用户是否已在房间中
-                    const meInRoom = wallet.connected && game.players.some(p => 
+                    // 检查当前用户是否已在房间中（必须本地也有word才算真正加入）
+                    const meInRoom = wallet.connected && game.word && game.players.some(p => 
                         p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
                     );
                     
@@ -1790,19 +1794,21 @@
             stopAITimeout();
             
             isSettling = false;
-            game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
+            game = { state: 'idle', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
             
             // 重置按钮
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = false;
             submitBtn.textContent = '🚀 Submit Word';
             document.getElementById('wordInput').disabled = false;
+            document.getElementById('wordInput').value = '';
+            
+            // 隐藏游戏区域，用户需要重新点击 Create Room 或 Join
+            document.getElementById('gameArea').classList.add('hidden');
+            document.getElementById('currentRoom').classList.add('hidden');
             
             showState('input');
             renderRoom();
-            
-            // 重新启动房间列表轮询
-            startRoomListPolling();
             
             document.getElementById('playersNeeded').textContent = '4';
             document.getElementById('waitingCount').textContent = '4';
