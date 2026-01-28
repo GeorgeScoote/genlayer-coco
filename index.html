@@ -382,6 +382,8 @@
             
             // 解析房间数据
             let players = [];
+            let meInFirebase = false;
+            
             if (roomData && roomData.players) {
                 players = Object.values(roomData.players).map(p => ({
                     addr: p.address.slice(0, 6) + '...' + p.address.slice(-4),
@@ -389,6 +391,22 @@
                     word: p.word || '',
                     ai: false
                 }));
+                
+                // 检查用户是否在Firebase中，如果是则恢复本地状态
+                if (wallet.connected) {
+                    const myData = Object.values(roomData.players).find(p => 
+                        p.address.toLowerCase() === wallet.address.toLowerCase()
+                    );
+                    if (myData) {
+                        meInFirebase = true;
+                        // 恢复本地状态
+                        if (!game.word) {
+                            game.word = myData.word;
+                            game.state = 'submitted';
+                            document.getElementById('submittedWordText').textContent = myData.word;
+                        }
+                    }
+                }
             }
             
             game.players = players;
@@ -401,11 +419,6 @@
             document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
             
             if (playerCount > 0) {
-                // 检查当前用户是否已在房间中（必须本地也有word才算真正加入）
-                const meInRoom = wallet.connected && game.word && players.some(p => 
-                    p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
-                );
-                
                 const emptySlots = Math.min(3, max - playerCount);
                 container.innerHTML = `
                     <div class="p-4 rounded-lg bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/30">
@@ -418,9 +431,9 @@
                                     <div class="text-xs text-orange-400 mt-1">📅 ${game.theme.name}</div>
                                 </div>
                             </div>
-                            ${!meInRoom && !game.word && wallet.connected ? `<button onclick="joinFirebaseRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
-                            ${!meInRoom && !game.word && !wallet.connected ? `<button onclick="handleWalletClick()" class="px-4 py-2 text-sm rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect to Join</button>` : ''}
-                            ${meInRoom ? '<span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm">You\'re in!</span>' : ''}
+                            ${!meInFirebase && wallet.connected ? `<button onclick="joinFirebaseRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
+                            ${!meInFirebase && !wallet.connected ? `<button onclick="handleWalletClick()" class="px-4 py-2 text-sm rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect to Join</button>` : ''}
+                            ${meInFirebase ? '<span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm">You\'re in!</span>' : ''}
                             ${playerCount >= max ? '<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Full</span>' : ''}
                         </div>
                         <div class="space-y-2 max-h-64 overflow-y-auto">
@@ -491,9 +504,13 @@
                 return;
             }
             
-            // 检查本地是否已提交过
-            if (game.word) {
-                toast('You already submitted a word!', 'bg-yellow-600');
+            // 检查是否已在Firebase房间中
+            const meInFirebase = game.players.some(p => 
+                p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
+            );
+            
+            if (meInFirebase) {
+                toast('You are already in the room!', 'bg-yellow-600');
                 return;
             }
             
@@ -511,9 +528,13 @@
                 return;
             }
             
-            // 只检查本地是否已提交过（不检查Firebase数据，因为可能是上一轮残留）
-            if (game.word) {
-                toast('You already submitted a word!', 'bg-yellow-600');
+            // 检查是否已在Firebase房间中
+            const meInFirebase = game.players.some(p => 
+                p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
+            );
+            
+            if (meInFirebase) {
+                toast('You are already in the room!', 'bg-yellow-600');
                 return;
             }
             
