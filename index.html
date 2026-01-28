@@ -125,6 +125,7 @@
                         <span class="font-medium text-white">Room Status</span>
                     </div>
                     <div class="flex items-center gap-2">
+                        <button onclick="clearRoom()" class="px-3 py-1.5 text-sm rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium transition">🗑️ Clear</button>
                         <button id="refreshBtn" onclick="manualRefresh()" class="px-3 py-1.5 text-sm rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 font-medium transition">🔄 Refresh</button>
                         <span id="roomStatusBadge" class="px-3 py-1 rounded-full bg-white/10 text-gray-400 text-sm">Loading...</span>
                     </div>
@@ -373,6 +374,24 @@
             if (isSettling || game.state === 'settling' || game.state === 'result') return;
             
             const roomData = snapshot.val();
+            
+            // 自动清空：检查房间数据是否超过30分钟
+            if (roomData && roomData.players) {
+                const players = Object.values(roomData.players);
+                if (players.length > 0) {
+                    const oldestTimestamp = Math.min(...players.map(p => p.timestamp || Date.now()));
+                    const ageMinutes = (Date.now() - oldestTimestamp) / 1000 / 60;
+                    
+                    // 超过5分钟且未满员，自动清空
+                    if (ageMinutes > 5 && players.length < GAME_CONFIG.maxPlayers) {
+                        console.log('Room expired, auto-clearing...');
+                        roomRef.remove();
+                        toast('Room expired, starting fresh!', 'bg-blue-600');
+                        return;
+                    }
+                }
+            }
+            
             renderRoomFromFirebase(roomData);
         });
         
@@ -433,7 +452,7 @@
                             </div>
                             ${!meInFirebase && wallet.connected ? `<button onclick="joinFirebaseRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
                             ${!meInFirebase && !wallet.connected ? `<button onclick="handleWalletClick()" class="px-4 py-2 text-sm rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect to Join</button>` : ''}
-                            ${meInFirebase ? '<span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm">You\'re in!</span>' : ''}
+                            ${meInFirebase ? `<div class="flex items-center gap-2"><span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm">You're in!</span><button onclick="leaveRoom()" class="px-3 py-1 text-xs rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30">Leave</button></div>` : ''}
                             ${playerCount >= max ? '<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Full</span>' : ''}
                         </div>
                         <div class="space-y-2 max-h-64 overflow-y-auto">
@@ -568,6 +587,74 @@
             } catch (err) {
                 console.error('Firebase submit error:', err);
                 toast('Submit failed: ' + err.message, 'bg-red-600');
+            }
+        }
+        
+        // 退出房间
+        async function leaveRoom() {
+            if (!wallet.connected) return;
+            
+            try {
+                // 从 Firebase 删除自己
+                const playerRef = roomRef.child('players').child(wallet.address.toLowerCase());
+                await playerRef.remove();
+                
+                // 重置本地状态
+                game.word = '';
+                game.state = 'input';
+                
+                // 隐藏游戏区域
+                document.getElementById('gameArea').classList.add('hidden');
+                document.getElementById('currentRoom').classList.add('hidden');
+                
+                // 重置按钮
+                const submitBtn = document.getElementById('submitBtn');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '🚀 Submit Word';
+                }
+                document.getElementById('wordInput').disabled = false;
+                document.getElementById('wordInput').value = '';
+                
+                toast('Left the room', 'bg-gray-600');
+                
+            } catch (err) {
+                console.error('Leave room error:', err);
+                toast('Failed to leave: ' + err.message, 'bg-red-600');
+            }
+        }
+        
+        // 清空整个房间（重置游戏）
+        async function clearRoom() {
+            if (!confirm('Clear all players from the room? This will reset the game.')) return;
+            
+            try {
+                // 清空 Firebase 房间
+                await roomRef.remove();
+                
+                // 重置本地状态
+                game.word = '';
+                game.state = 'input';
+                game.players = [];
+                
+                // 隐藏游戏区域
+                document.getElementById('gameArea').classList.add('hidden');
+                document.getElementById('currentRoom').classList.add('hidden');
+                
+                // 重置按钮
+                const submitBtn = document.getElementById('submitBtn');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '🚀 Submit Word';
+                }
+                document.getElementById('wordInput').disabled = false;
+                document.getElementById('wordInput').value = '';
+                
+                toast('Room cleared!', 'bg-green-600');
+                
+            } catch (err) {
+                console.error('Clear room error:', err);
+                toast('Failed to clear: ' + err.message, 'bg-red-600');
             }
         }
         
@@ -864,14 +951,6 @@
                 }).join('');
             }
             document.getElementById('liveRoomBadge').textContent = game.players.length + '/5';
-        }
-
-        function leaveRoom() {
-            currentRoomId = null;
-            document.getElementById('currentRoom').classList.add('hidden');
-            game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
-            showState('input');
-            renderRoom();
         }
 
         function showCurrentRoom(playerCount) {
