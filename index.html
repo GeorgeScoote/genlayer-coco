@@ -564,17 +564,29 @@
             toast('Enter your word to join!', 'bg-blue-600');
         }
         
-        // 提交词语到 Firebase
+        // 提交词语：先链上，再Firebase
         async function submitWordToFirebase(word) {
             if (!wallet.connected || !word) return;
             
             try {
-                // 写入 Firebase
+                // 1️⃣ 先调用合约写入链上
+                toast('Writing to blockchain...', 'bg-orange-500');
+                const txResult = await callContract('submit_word', [word]);
+                
+                if (!txResult.success) {
+                    throw new Error(txResult.error || 'Contract call failed');
+                }
+                
+                console.log('Chain TX success:', txResult.hash);
+                toast('On-chain success! Syncing...', 'bg-blue-500');
+                
+                // 2️⃣ 链上成功后，写入Firebase同步
                 const playerRef = roomRef.child('players').child(wallet.address.toLowerCase());
                 await playerRef.set({
                     address: wallet.address,
                     word: word,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    txHash: txResult.hash || ''
                 });
                 
                 console.log('Word submitted to Firebase:', word);
@@ -582,11 +594,12 @@
                 game.state = 'submitted';
                 showState('submitted');
                 document.getElementById('submittedWordText').textContent = word;
-                toast('Word submitted! Waiting for players...', 'bg-green-600');
+                toast('✅ Submitted! TX: ' + (txResult.hash || '').slice(0, 10) + '...', 'bg-green-600');
                 
             } catch (err) {
-                console.error('Firebase submit error:', err);
-                toast('Submit failed: ' + err.message, 'bg-red-600');
+                console.error('Submit error:', err);
+                toast('Failed: ' + err.message, 'bg-red-600');
+                throw err;
             }
         }
         
