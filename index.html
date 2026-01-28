@@ -1119,6 +1119,11 @@
             
             await loadContractData();
             updateHeaderXP();
+            
+            // 重新渲染房间状态（因为钱包连接了，按钮要更新）
+            roomRef.once('value').then(snapshot => {
+                renderRoomFromFirebase(snapshot.val());
+            });
         }
 
         async function loadContractData() {
