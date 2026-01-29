@@ -250,7 +250,9 @@
     </main>
 
     <footer class="text-center py-6 text-gray-600 text-xs">
-        Built with 💜 on GenLayer
+        <div class="mb-2 text-gray-400">🔮 Let consensus become the future, and let the future become consensus. 🚀</div>
+        Built with 💜 on GenLayer<br>
+        <a href="https://x.com/TeenaTiesha" target="_blank" class="text-purple-400 hover:text-purple-300 mt-2 inline-block">@TeenaTiesha</a>
     </footer>
 
     <div id="toast" class="fixed bottom-4 right-4 z-50 px-5 py-3 rounded-xl shadow-2xl text-white text-sm font-medium transition-all translate-x-full opacity-0"></div>
@@ -367,6 +369,7 @@
         
         // 页面加载时初始化
         fetchLeaderboard();
+        fetchHistory();
         
         // Firebase 实时监听房间状态
         roomRef.on('value', (snapshot) => {
@@ -1558,10 +1561,17 @@
         // 
         async function fetchHistory() {
             try {
-                const data = await readContract('get_history', [10]);
-                if (data && Array.isArray(data)) {
-                    history = data.reverse();
-                    renderHistory();
+                const data = await readContract('get_history', []);
+                console.log('History data:', data);
+                if (data) {
+                    let historyData = data;
+                    if (typeof data === 'string') {
+                        try { historyData = JSON.parse(data); } catch(e) {}
+                    }
+                    if (Array.isArray(historyData)) {
+                        history = historyData.reverse();
+                        renderHistory();
+                    }
                 }
             } catch (err) {
                 console.error('Fetch history error:', err);
