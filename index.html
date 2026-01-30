@@ -6,9 +6,6 @@
     <title>GenLayer Consensus Challenge</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/msgpack-lite@0.1.26/dist/msgpack.min.js"></script>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #0f0f1a 100%); }
         .gradient-text { background: linear-gradient(90deg, #ff6b35, #f7931e, #ffcc02); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
@@ -125,7 +122,6 @@
                         <span class="font-medium text-white">Room Status</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button onclick="clearRoom()" class="px-3 py-1.5 text-sm rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium transition">🗑️ Clear</button>
                         <button id="refreshBtn" onclick="manualRefresh()" class="px-3 py-1.5 text-sm rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 font-medium transition">🔄 Refresh</button>
                         <span id="roomStatusBadge" class="px-3 py-1 rounded-full bg-white/10 text-gray-400 text-sm">Loading...</span>
                     </div>
@@ -247,12 +243,18 @@
             </div>
         </div>
 
+        <!-- Contract Info -->
+        <div class="mt-8 text-center p-4 rounded-lg bg-white/5">
+            <p class="text-gray-500 text-xs mb-2">🔗 Smart Contract (GenLayer Testnet)</p>
+            <a href="https://studio.genlayer.com" target="_blank" 
+               class="text-orange-400 hover:text-orange-300 text-xs font-mono transition">
+                0x8443995060C9dd4bBE97A9e7e39F4E73c43cCb19
+            </a>
+        </div>
     </main>
 
     <footer class="text-center py-6 text-gray-600 text-xs">
-        <div class="mb-2 text-gray-400">🔮 Let consensus become the future, and let the future become consensus. 🚀</div>
-        Built with 💜 on GenLayer<br>
-        <a href="https://x.com/TeenaTiesha" target="_blank" class="text-purple-400 hover:text-purple-300 mt-2 inline-block">@TeenaTiesha</a>
+        Built with 💜 on GenLayer
     </footer>
 
     <div id="toast" class="fixed bottom-4 right-4 z-50 px-5 py-3 rounded-xl shadow-2xl text-white text-sm font-medium transition-all translate-x-full opacity-0"></div>
@@ -260,35 +262,19 @@
     <script>
         // ========== CONTRACT CONFIG ==========
         const CONTRACT = {
-            address: '0x1DeAfc00b6d3CF9e48e2433311a77F58a5d235A6',
+            address: '0xF7201Bb19FE8203767fa5F02c37EA8a0C84AcaBa',
             rpcUrl: 'https://studio.genlayer.com/api',
             chainId: 61999
         };
 
-        // ========== FIREBASE CONFIG ==========
-        const firebaseConfig = {
-            apiKey: "AIzaSyBCShjZ6PmU-4HUxKZq1v-xhi9S2QqZ-pg",
-            authDomain: "genlayer-game-5d60f.firebaseapp.com",
-            databaseURL: "https://genlayer-game-5d60f-default-rtdb.firebaseio.com",
-            projectId: "genlayer-game-5d60f",
-            storageBucket: "genlayer-game-5d60f.firebasestorage.app",
-            messagingSenderId: "854328710247",
-            appId: "1:854328710247:web:daa0e8f50966fab0dd30c2"
-        };
-        
-        // 初始化 Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        const roomRef = db.ref('room');
-
         // ========== GAME CONFIG ==========
         const GAME_CONFIG = {
             roomDuration: 5 * 60,  // 5分钟房间时间
-            minPlayers: 5,         // 最少5人
-            maxPlayers: 5,         // 最多5人
+            minPlayers: 5,         // 5人开始（与合约匹配）
+            maxPlayers: 5,         // 最多5人（与合约匹配）
             aiDelay: 3 * 60,       // 3分钟后AI开始补位
-            xpWinner: 100,         // 冠军XP
-            xpParticipant: 20,     // 基础XP
+            xpWinner: 100,         // 赢家XP
+            xpParticipant: 20,     // 参与者XP
             xpBonus: 50            // 匹配奖励XP
         };
         
@@ -367,81 +353,98 @@
         // ========== ROOM MANAGEMENT ==========
         let isSettling = false;
         
-        // 页面加载时初始化
+        // 页面加载时获取一次链上数据（不轮询）
+        refreshRoomList();
         fetchLeaderboard();
-        fetchHistory();
         
-        // Firebase 实时监听房间状态
-        roomRef.on('value', (snapshot) => {
-            console.log('Firebase room update:', snapshot.val());
+        // 手动刷新房间状态（不使用轮询）
+        function startRoomListPolling() {
+            // 仅刷新一次，不再轮询
+            refreshRoomList();
+        }
+        
+        // 手动刷新按钮调用
+        async function manualRefresh() {
+            const btn = document.getElementById('refreshBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '🔄 Loading...';
+            }
+            await refreshRoomList();
+            await fetchLeaderboard();
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '🔄 Refresh';
+            }
+            toast('Room status updated', 'bg-green-600');
+        }
+        
+        async function refreshRoomList() {
+            // 如果正在结算或已结算，跳过刷新
             if (isSettling || game.state === 'settling' || game.state === 'result') return;
             
-            const roomData = snapshot.val();
+            console.log('=== refreshRoomList START ===');
             
-            // 自动结算：检查房间是否超过5分钟
-            if (roomData && roomData.players) {
-                const players = Object.values(roomData.players);
-                if (players.length > 0) {
-                    const oldestTimestamp = Math.min(...players.map(p => p.timestamp || Date.now()));
-                    const ageMinutes = (Date.now() - oldestTimestamp) / 1000 / 60;
-                    
-                    // 超过5分钟
-                    if (ageMinutes > 5) {
-                        if (players.length >= GAME_CONFIG.minPlayers) {
-                            // 满5人，自动结算
-                            console.log('Room expired with enough players, auto-settling...');
-                            isSettling = true;
-                            toast('⏰ Time up! Settling game...', 'bg-orange-600');
-                            setTimeout(() => settleGameOnChain(roomData), 2000);
-                        } else {
-                            // 不足5人，清空房间
-                            console.log('Room expired, not enough players, clearing...');
-                            roomRef.remove();
-                            toast('Room expired, need 5 players!', 'bg-yellow-600');
-                        }
-                        return;
-                    }
-                }
-            }
+            // 从链上读取房间状态 (SimpleGame 用 get_status)
+            const status = await readContract('get_game_status', []);
+            console.log('Chain room status:', status);
+            console.log('Status type:', typeof status);
+            console.log('Status stringified:', JSON.stringify(status));
             
-            renderRoomFromFirebase(roomData);
-        });
-        
-        // 从 Firebase 数据渲染房间
-        function renderRoomFromFirebase(roomData) {
             const container = document.getElementById('roomListContent');
             
-            // 解析房间数据
-            let players = [];
-            let meInFirebase = false;
+            // 解析 ConsensusChallenge 返回的数据
+            // 返回格式: {"players": N, "addresses": ["0x..."], "words": ["word1"]}
+            let roomData = null;
             
-            if (roomData && roomData.players) {
-                players = Object.values(roomData.players).map(p => ({
-                    addr: p.address.slice(0, 6) + '...' + p.address.slice(-4),
-                    fullAddr: p.address,
-                    word: p.word || '',
-                    ai: false
-                }));
-                
-                // 检查用户是否在Firebase中，如果是则恢复本地状态
-                if (wallet.connected) {
-                    const myData = Object.values(roomData.players).find(p => 
-                        p.address.toLowerCase() === wallet.address.toLowerCase()
-                    );
-                    if (myData) {
-                        meInFirebase = true;
-                        // 恢复本地状态
-                        if (!game.word) {
-                            game.word = myData.word;
-                            game.state = 'submitted';
-                            document.getElementById('submittedWordText').textContent = myData.word;
-                        }
+            if (status && typeof status === 'object') {
+                // 直接使用返回的对象
+                if (status.addresses !== undefined) {
+                    roomData = status;
+                } else {
+                    // SimpleGame兼容: {"address": "word"} 格式
+                    const addresses = Object.keys(status);
+                    const words = Object.values(status);
+                    roomData = { players: addresses.length, addresses, words };
+                }
+            } else if (status && typeof status === 'string') {
+                try { 
+                    const parsed = JSON.parse(status);
+                    if (parsed.addresses !== undefined) {
+                        roomData = parsed;
+                    } else {
+                        const addresses = Object.keys(parsed);
+                        const words = Object.values(parsed);
+                        roomData = { players: addresses.length, addresses, words };
                     }
+                } catch(e) {
+                    console.log('Failed to parse status:', e);
                 }
             }
             
-            game.players = players;
-            const playerCount = players.length;
+            console.log('Parsed roomData:', roomData);
+            
+            // 构建玩家列表
+            if (game.state !== 'submitted' && game.state !== 'settling') {
+                if (roomData && roomData.addresses && roomData.addresses.length > 0) {
+                    game.players = roomData.addresses.map((addr, i) => ({
+                        addr: addr.slice(0, 6) + '...' + addr.slice(-4),
+                        fullAddr: addr,
+                        word: roomData.words ? (roomData.words[i] || '') : '',
+                        ai: false
+                    }));
+                    console.log('Built players from chain:', game.players.length);
+                } else {
+                    game.players = [];
+                    console.log('No players from chain data');
+                }
+            }
+            
+            console.log('Final game.players:', game.players);
+            console.log('=== refreshRoomList END ===');
+            
+            // 计算当前玩家数和需要的人数
+            const playerCount = game.players.length;
             const needed = Math.max(0, GAME_CONFIG.minPlayers - playerCount);
             const max = GAME_CONFIG.maxPlayers;
             
@@ -450,6 +453,11 @@
             document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
             
             if (playerCount > 0) {
+                // 检查当前用户是否已在房间中
+                const meInRoom = wallet.connected && game.players.some(p => 
+                    p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
+                );
+                
                 const emptySlots = Math.min(3, max - playerCount);
                 container.innerHTML = `
                     <div class="p-4 rounded-lg bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/30">
@@ -462,24 +470,25 @@
                                     <div class="text-xs text-orange-400 mt-1">📅 ${game.theme.name}</div>
                                 </div>
                             </div>
-                            ${!meInFirebase && wallet.connected ? `<button onclick="joinFirebaseRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
-                            ${!meInFirebase && !wallet.connected ? `<button onclick="handleWalletClick()" class="px-4 py-2 text-sm rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect to Join</button>` : ''}
-                            ${meInFirebase ? `<div class="flex items-center gap-2"><span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm">You're in!</span><button onclick="leaveRoom()" class="px-3 py-1 text-xs rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30">Leave</button></div>` : ''}
+                            ${!meInRoom && !game.word && wallet.connected ? `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
+                            ${!meInRoom && !game.word && !wallet.connected ? `<button onclick="handleWalletClick()" class="px-4 py-2 text-sm rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect to Join</button>` : ''}
+                            ${meInRoom ? '<span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm">You\'re in!</span>' : ''}
                             ${playerCount >= max ? '<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Full</span>' : ''}
                         </div>
                         <div class="space-y-2 max-h-64 overflow-y-auto">
-                            ${players.map((p, i) => {
+                            ${game.players.map((p, i) => {
                                 const isMe = wallet.connected && p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase();
                                 return `
                                 <div class="flex items-center justify-between p-2 rounded ${isMe ? 'bg-orange-500/20 border border-orange-500/30' : 'bg-white/5'}">
                                     <div class="flex items-center gap-2">
-                                        <span class="w-8 h-8 rounded-full ${isMe ? 'bg-orange-500/30' : 'bg-orange-500/20'} flex items-center justify-center text-sm">👤</span>
+                                        <span class="w-8 h-8 rounded-full ${p.ai ? 'bg-blue-500/20' : isMe ? 'bg-orange-500/30' : 'bg-orange-500/20'} flex items-center justify-center text-sm">${p.ai ? '🤖' : '👤'}</span>
                                         <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
+                                        ${p.ai ? '<span class="px-1 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
                                     </div>
                                     <span class="px-2 py-1 rounded bg-green-500/20 text-green-400 text-xs">${p.word}</span>
                                 </div>
                             `}).join('')}
-                            ${Array(emptySlots).fill(0).map(() => `
+                            ${Array(emptySlots).fill(0).map((_, i) => `
                                 <div class="flex items-center justify-between p-2 rounded bg-white/5 border border-dashed border-gray-700">
                                     <div class="flex items-center gap-2">
                                         <span class="w-8 h-8 rounded-full bg-gray-700/50 flex items-center justify-center text-sm">❓</span>
@@ -492,22 +501,30 @@
                     </div>
                 `;
                 
-                document.getElementById('roomStatusBadge').textContent = playerCount + '/' + max + ' Players';
-                document.getElementById('roomStatusBadge').className = 'px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm font-medium';
-                
                 renderRoom();
                 
-                // 检查是否满员 - 触发结算
+                // 检查是否满员
                 if (playerCount >= max && !isSettling && game.state !== 'settling' && game.state !== 'result') {
                     isSettling = true;
-                    toast('🎮 Room full! Game settling...', 'bg-green-600');
-                    setTimeout(() => settleGameOnChain(roomData), 2000);
+                    // 立即停止轮询防止重复触发
+                    if (globalPollingInterval) {
+                        clearInterval(globalPollingInterval);
+                        globalPollingInterval = null;
+                    }
+                    toast('🎮 Room full! Game starting!', 'bg-green-600');
+                    setTimeout(() => settle(), 2000);
                 }
                 
             } else {
-                // 没有房间
+                // 没有房间 - 显示创建房间按钮和调试信息
                 document.getElementById('roomStatusBadge').textContent = 'No Room';
                 document.getElementById('roomStatusBadge').className = 'px-3 py-1 rounded-full bg-gray-500/20 text-gray-400 text-sm';
+                
+                // 显示调试信息
+                const debugInfo = status === null ? 'RPC returned null (check console)' : 
+                                  status === undefined ? 'RPC returned undefined' :
+                                  typeof status === 'string' ? 'Got string: ' + status.slice(0, 50) :
+                                  'Got: ' + JSON.stringify(status).slice(0, 50);
                 
                 container.innerHTML = `
                     <div class="p-6 rounded-lg bg-white/5 text-center">
@@ -515,397 +532,23 @@
                         <p class="text-gray-300 font-medium mb-2">No active room</p>
                         <p class="text-gray-500 text-sm mb-4">Be the first to start a new game!</p>
                         ${wallet.connected ? 
-                            `<button onclick="createFirebaseRoom()" class="px-6 py-3 rounded-lg btn-primary text-white font-medium shadow-lg shadow-orange-500/20">+ Create Room</button>` :
+                            `<button onclick="createRoom()" class="px-6 py-3 rounded-lg btn-primary text-white font-medium shadow-lg shadow-orange-500/20">+ Create Room</button>` :
                             `<button onclick="handleWalletClick()" class="px-6 py-3 rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect Wallet to Create</button>`
                         }
+                        <p class="text-xs text-gray-600 mt-4">Debug: ${debugInfo}</p>
                     </div>
                 `;
             }
             
-            // 同步更新currentRoom区域
+            // 更新roomStatusBadge
+            if (playerCount > 0) {
+                document.getElementById('roomStatusBadge').textContent = playerCount + '/' + max + ' Players';
+                document.getElementById('roomStatusBadge').className = 'px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm font-medium';
+            }
+            
+            // 同步更新currentRoom区域（如果用户已在房间中）
             if (!document.getElementById('currentRoom').classList.contains('hidden')) {
                 updateLivePlayerList();
-            }
-        }
-        
-        // 创建 Firebase 房间
-        async function createFirebaseRoom() {
-            if (!wallet.connected) {
-                toast('Connect wallet first', 'bg-red-600');
-                return;
-            }
-            
-            // 检查是否已在Firebase房间中
-            const meInFirebase = game.players.some(p => 
-                p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
-            );
-            
-            if (meInFirebase) {
-                toast('You are already in the room!', 'bg-yellow-600');
-                return;
-            }
-            
-            // 显示输入界面
-            document.getElementById('gameArea').classList.remove('hidden');
-            document.getElementById('currentRoom').classList.remove('hidden');
-            showState('input');
-            toast('Enter your word!', 'bg-blue-600');
-        }
-        
-        // 加入 Firebase 房间
-        async function joinFirebaseRoom() {
-            if (!wallet.connected) {
-                toast('Connect wallet first', 'bg-red-600');
-                return;
-            }
-            
-            // 检查是否已在Firebase房间中
-            const meInFirebase = game.players.some(p => 
-                p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
-            );
-            
-            if (meInFirebase) {
-                toast('You are already in the room!', 'bg-yellow-600');
-                return;
-            }
-            
-            // 显示输入界面
-            document.getElementById('gameArea').classList.remove('hidden');
-            document.getElementById('currentRoom').classList.remove('hidden');
-            showState('input');
-            toast('Enter your word to join!', 'bg-blue-600');
-        }
-        
-        // 提交词语：先链上，再Firebase
-        async function submitWordToFirebase(word) {
-            if (!wallet.connected || !word) return;
-            
-            try {
-                // 1️⃣ 先调用合约写入链上
-                toast('Writing to blockchain...', 'bg-orange-500');
-                const txResult = await callContract('submit_word', [word]);
-                
-                if (!txResult.success) {
-                    throw new Error(txResult.error || 'Contract call failed');
-                }
-                
-                console.log('Chain TX success:', txResult.hash);
-                toast('On-chain success! Syncing...', 'bg-blue-500');
-                
-                // 2️⃣ 链上成功后，写入Firebase同步
-                const playerRef = roomRef.child('players').child(wallet.address.toLowerCase());
-                await playerRef.set({
-                    address: wallet.address,
-                    word: word,
-                    timestamp: Date.now(),
-                    txHash: txResult.hash || ''
-                });
-                
-                console.log('Word submitted to Firebase:', word);
-                game.word = word;
-                game.state = 'submitted';
-                showState('submitted');
-                document.getElementById('submittedWordText').textContent = word;
-                toast('✅ Submitted! TX: ' + (txResult.hash || '').slice(0, 10) + '...', 'bg-green-600');
-                
-            } catch (err) {
-                console.error('Submit error:', err);
-                toast('Failed: ' + err.message, 'bg-red-600');
-                throw err;
-            }
-        }
-        
-        // 退出房间
-        async function leaveRoom() {
-            if (!wallet.connected) return;
-            
-            try {
-                // 从 Firebase 删除自己
-                const playerRef = roomRef.child('players').child(wallet.address.toLowerCase());
-                await playerRef.remove();
-                
-                // 重置本地状态
-                game.word = '';
-                game.state = 'input';
-                
-                // 隐藏游戏区域
-                document.getElementById('gameArea').classList.add('hidden');
-                document.getElementById('currentRoom').classList.add('hidden');
-                
-                // 重置按钮
-                const submitBtn = document.getElementById('submitBtn');
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = '🚀 Submit Word';
-                }
-                document.getElementById('wordInput').disabled = false;
-                document.getElementById('wordInput').value = '';
-                
-                toast('Left the room', 'bg-gray-600');
-                
-            } catch (err) {
-                console.error('Leave room error:', err);
-                toast('Failed to leave: ' + err.message, 'bg-red-600');
-            }
-        }
-        
-        // 清空整个房间（重置游戏）
-        async function clearRoom() {
-            if (!confirm('Clear all players from the room? This will reset the game.')) return;
-            
-            try {
-                // 清空 Firebase 房间
-                await roomRef.remove();
-                
-                // 重置本地状态
-                game.word = '';
-                game.state = 'input';
-                game.players = [];
-                
-                // 隐藏游戏区域
-                document.getElementById('gameArea').classList.add('hidden');
-                document.getElementById('currentRoom').classList.add('hidden');
-                
-                // 重置按钮
-                const submitBtn = document.getElementById('submitBtn');
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = '🚀 Submit Word';
-                }
-                document.getElementById('wordInput').disabled = false;
-                document.getElementById('wordInput').value = '';
-                
-                toast('Room cleared!', 'bg-green-600');
-                
-            } catch (err) {
-                console.error('Clear room error:', err);
-                toast('Failed to clear: ' + err.message, 'bg-red-600');
-            }
-        }
-        
-        // 游戏结算 - 写入链上
-        async function settleGameOnChain(roomData) {
-            console.log('Settling game on chain...', roomData);
-            
-            try {
-                // 调用合约结算游戏（计算匹配奖励）
-                if (wallet.connected) {
-                    const txResult = await callContract('settle_game', []);
-                    console.log('Chain settlement TX:', txResult);
-                }
-                
-                // 清空 Firebase 房间
-                await roomRef.remove();
-                console.log('Firebase room cleared');
-                
-                // 显示结果
-                isSettling = false;
-                await fetchLeaderboard();
-                showGameResult();
-                toast('🎉 Game settled! Check results!', 'bg-green-600');
-                
-            } catch (err) {
-                console.error('Settlement error:', err);
-                isSettling = false;
-                toast('Settlement failed: ' + err.message, 'bg-red-600');
-            }
-        }
-        
-        // 手动刷新（现在只刷新排行榜）
-        async function manualRefresh() {
-            const btn = document.getElementById('refreshBtn');
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '🔄 Loading...';
-            }
-            await fetchLeaderboard();
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '🔄 Refresh';
-            }
-            toast('Data refreshed', 'bg-green-600');
-        }
-        
-        async function refreshRoomList() {
-            // 如果正在结算或已结算，跳过刷新
-            if (isSettling || game.state === 'settling' || game.state === 'result') return;
-            
-            console.log('=== refreshRoomList START ===');
-            
-            try {
-                // 从链上读取房间状态
-                const status = await readContract('get_game_status', []);
-                console.log('Chain room status:', status);
-                console.log('Status type:', typeof status);
-                
-                const container = document.getElementById('roomListContent');
-                
-                // 增强解析容错：处理多种格式
-                let roomData = null;
-                
-                try {
-                    if (status && typeof status === 'object') {
-                        // 已经是对象
-                        if (status.addresses !== undefined) {
-                            roomData = status;
-                        } else if (status.players !== undefined) {
-                            roomData = status;
-                        } else {
-                            // SimpleGame兼容: {"address": "word"} 格式
-                            const addresses = Object.keys(status);
-                            const words = Object.values(status);
-                            roomData = { players: addresses.length, addresses, words };
-                        }
-                    } else if (status && typeof status === 'string') {
-                        // 字符串：可能是普通JSON或转义JSON
-                        let parsed = status;
-                        
-                        // 尝试解析，如果还是字符串再解析一次（处理双重转义）
-                        try { parsed = JSON.parse(parsed); } catch(e) {}
-                        if (typeof parsed === 'string') {
-                            try { parsed = JSON.parse(parsed); } catch(e) {}
-                        }
-                        
-                        if (parsed && typeof parsed === 'object') {
-                            if (parsed.addresses !== undefined) {
-                                roomData = parsed;
-                            } else if (parsed.players !== undefined) {
-                                roomData = parsed;
-                            } else {
-                                const addresses = Object.keys(parsed);
-                                const words = Object.values(parsed);
-                                roomData = { players: addresses.length, addresses, words };
-                            }
-                        }
-                    }
-                } catch (parseError) {
-                    console.error('Parse error:', parseError);
-                }
-                
-                console.log('Parsed roomData:', roomData);
-                
-                // 放宽显示条件：只要有地址就构建玩家列表
-                if (roomData && roomData.addresses && roomData.addresses.length > 0) {
-                    game.players = roomData.addresses.map((addr, i) => ({
-                        addr: addr.slice(0, 6) + '...' + addr.slice(-4),
-                        fullAddr: addr,
-                        word: roomData.words ? (roomData.words[i] || '') : '',
-                        ai: false
-                    }));
-                    console.log('Built players from chain:', game.players.length);
-                } else {
-                    // 只有在没有数据时才清空
-                    if (game.state !== 'submitted') {
-                        game.players = [];
-                    }
-                    console.log('No players from chain data');
-                }
-                
-                console.log('Final game.players:', game.players);
-                console.log('=== refreshRoomList END ===');
-            
-                // 计算当前玩家数和需要的人数
-                const playerCount = game.players.length;
-                const needed = Math.max(0, GAME_CONFIG.minPlayers - playerCount);
-                const max = GAME_CONFIG.maxPlayers;
-                
-                // 更新人数显示
-                document.getElementById('playersNeeded').textContent = needed > 0 ? needed : 'Ready';
-                document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
-                
-                if (playerCount > 0) {
-                    // 检查当前用户是否已在房间中（必须本地也有word才算真正加入）
-                    const meInRoom = wallet.connected && game.word && game.players.some(p => 
-                        p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
-                    );
-                    
-                    const emptySlots = Math.min(3, max - playerCount);
-                    container.innerHTML = `
-                        <div class="p-4 rounded-lg bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/30">
-                            <div class="flex items-center justify-between mb-3">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-2xl">🎮</span>
-                                    <div>
-                                        <div class="text-white font-bold">${playerCount}/${max} Players</div>
-                                        <div class="text-xs text-gray-400">${playerCount < GAME_CONFIG.minPlayers ? `Need ${needed} more to start` : 'Ready to play!'}</div>
-                                        <div class="text-xs text-orange-400 mt-1">📅 ${game.theme.name}</div>
-                                    </div>
-                                </div>
-                                ${!meInRoom && !game.word && wallet.connected ? `<button onclick="joinChainRoom()" class="px-4 py-2 text-sm rounded-lg btn-primary text-white font-medium">Join Now</button>` : ''}
-                                ${!meInRoom && !game.word && !wallet.connected ? `<button onclick="handleWalletClick()" class="px-4 py-2 text-sm rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect to Join</button>` : ''}
-                                ${meInRoom ? '<span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm">You\'re in!</span>' : ''}
-                                ${playerCount >= max ? '<span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Full</span>' : ''}
-                            </div>
-                            <div class="space-y-2 max-h-64 overflow-y-auto">
-                                ${game.players.map((p, i) => {
-                                    const isMe = wallet.connected && p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase();
-                                    return `
-                                    <div class="flex items-center justify-between p-2 rounded ${isMe ? 'bg-orange-500/20 border border-orange-500/30' : 'bg-white/5'}">
-                                        <div class="flex items-center gap-2">
-                                            <span class="w-8 h-8 rounded-full ${p.ai ? 'bg-blue-500/20' : isMe ? 'bg-orange-500/30' : 'bg-orange-500/20'} flex items-center justify-center text-sm">${p.ai ? '🤖' : '👤'}</span>
-                                            <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
-                                            ${p.ai ? '<span class="px-1 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
-                                        </div>
-                                        <span class="px-2 py-1 rounded bg-green-500/20 text-green-400 text-xs">${p.word}</span>
-                                    </div>
-                                `}).join('')}
-                                ${Array(emptySlots).fill(0).map((_, i) => `
-                                    <div class="flex items-center justify-between p-2 rounded bg-white/5 border border-dashed border-gray-700">
-                                        <div class="flex items-center gap-2">
-                                            <span class="w-8 h-8 rounded-full bg-gray-700/50 flex items-center justify-center text-sm">❓</span>
-                                            <span class="text-gray-500">Waiting...</span>
-                                        </div>
-                                        <span class="px-2 py-1 rounded bg-gray-700/50 text-gray-500 text-xs">Empty</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `;
-                    
-                    renderRoom();
-                    
-                    // 检查是否满员
-                    if (playerCount >= max && !isSettling && game.state !== 'settling' && game.state !== 'result') {
-                        isSettling = true;
-                        // 立即停止轮询防止重复触发
-                        if (globalPollingInterval) {
-                            clearInterval(globalPollingInterval);
-                            globalPollingInterval = null;
-                        }
-                        toast('🎮 Room full! Game starting!', 'bg-green-600');
-                        setTimeout(() => settle(), 2000);
-                    }
-                    
-                } else {
-                    // 没有房间 - 显示创建房间按钮
-                    document.getElementById('roomStatusBadge').textContent = 'No Room';
-                    document.getElementById('roomStatusBadge').className = 'px-3 py-1 rounded-full bg-gray-500/20 text-gray-400 text-sm';
-                    
-                    container.innerHTML = `
-                        <div class="p-6 rounded-lg bg-white/5 text-center">
-                            <div class="text-4xl mb-3">🎯</div>
-                            <p class="text-gray-300 font-medium mb-2">No active room</p>
-                            <p class="text-gray-500 text-sm mb-4">Be the first to start a new game!</p>
-                            ${wallet.connected ? 
-                                `<button onclick="createRoom()" class="px-6 py-3 rounded-lg btn-primary text-white font-medium shadow-lg shadow-orange-500/20">+ Create Room</button>` :
-                                `<button onclick="handleWalletClick()" class="px-6 py-3 rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">Connect Wallet to Create</button>`
-                            }
-                        </div>
-                    `;
-                }
-                
-                // 更新roomStatusBadge
-                if (playerCount > 0) {
-                    document.getElementById('roomStatusBadge').textContent = playerCount + '/' + max + ' Players';
-                    document.getElementById('roomStatusBadge').className = 'px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm font-medium';
-                }
-                
-                // 同步更新currentRoom区域（如果用户已在房间中）
-                if (!document.getElementById('currentRoom').classList.contains('hidden')) {
-                    updateLivePlayerList();
-                }
-            } catch (err) {
-                console.error('refreshRoomList error:', err);
             }
         }
 
@@ -976,6 +619,14 @@
                 }).join('');
             }
             document.getElementById('liveRoomBadge').textContent = game.players.length + '/5';
+        }
+
+        function leaveRoom() {
+            currentRoomId = null;
+            document.getElementById('currentRoom').classList.add('hidden');
+            game = { state: 'input', word: '', players: [], countdown: null, interval: null, lastTime: Date.now(), txPending: false, pollingInterval: null, aiTimeout: null };
+            showState('input');
+            renderRoom();
         }
 
         function showCurrentRoom(playerCount) {
@@ -1131,11 +782,6 @@
             
             await loadContractData();
             updateHeaderXP();
-            
-            // 重新渲染房间状态（因为钱包连接了，按钮要更新）
-            roomRef.once('value').then(snapshot => {
-                renderRoomFromFirebase(snapshot.val());
-            });
         }
 
         async function loadContractData() {
@@ -1287,29 +933,65 @@
             wordInput.disabled = true;
             game.txPending = true;
             
-            toast('Submitting word...', 'bg-orange-500');
+            toast('Sending to chain...', 'bg-orange-500');
 
             try {
-                // 写入 Firebase（实时同步）
-                await submitWordToFirebase(w);
+                // 发送到链上
+                const txResult = await callContract('submit_word', [w]);
                 
-                wordInput.value = '';
-                submitBtn.textContent = 'Submitted ✓';
-                submitBtn.disabled = true;
-                
-                // 启动房间计时器
-                startCountdown();
-                startAITimeout();
-                
-                // 更新房间内玩家列表
-                updateLivePlayerList();
-                renderRoom();
-                
-                game.txPending = false;
+                if (txResult.success && txResult.hash) {
+                    game.word = w;
+                    
+                    // 添加自己到玩家列表
+                    if (!game.players.some(p => p.fullAddr?.toLowerCase() === wallet.address.toLowerCase())) {
+                        game.players.push({
+                            addr: wallet.short,
+                            fullAddr: wallet.address,
+                            word: w,
+                            ai: false
+                        });
+                    }
+                    
+                    document.getElementById('submittedWordText').textContent = w;
+                    wordInput.value = '';
+                    
+                    // 更新人数显示
+                    const needed = GAME_CONFIG.minPlayers - game.players.length;
+                    document.getElementById('playersNeeded').textContent = needed > 0 ? needed : 'Ready';
+                    document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
+                    
+                    showState('submitted');
+                    toast('Submitted! TX: ' + txResult.hash.slice(0, 10) + '...', 'bg-green-600');
+                    
+                    submitBtn.textContent = 'Submitted ✓';
+                    submitBtn.disabled = true;
+                    
+                    // 启动房间计时器
+                    startCountdown();
+                    startAITimeout();
+                    
+                    // 更新房间内玩家列表
+                    updateLivePlayerList();
+                    
+                    // 刷新房间列表
+                    setTimeout(() => refreshRoomList(), 2000);
+                    renderRoom();
+                    
+                    game.txPending = false;
+                    return;
+                    
+                } else {
+                    throw new Error(txResult.error || 'Transaction failed');
+                }
                 
             } catch (err) {
                 console.error('Submit error:', err);
-                toast('Error: ' + (err.message || 'Unknown'), 'bg-red-600');
+                
+                if (err.code === 4001 || err.message?.includes('denied') || err.message?.includes('rejected')) {
+                    toast('Transaction cancelled', 'bg-gray-600');
+                } else {
+                    toast('Error: ' + (err.message || 'Unknown'), 'bg-red-600');
+                }
                 
                 game.txPending = false;
                 submitBtn.disabled = false;
@@ -1561,17 +1243,10 @@
         // 
         async function fetchHistory() {
             try {
-                const data = await readContract('get_history', []);
-                console.log('History data:', data);
-                if (data) {
-                    let historyData = data;
-                    if (typeof data === 'string') {
-                        try { historyData = JSON.parse(data); } catch(e) {}
-                    }
-                    if (Array.isArray(historyData)) {
-                        history = historyData.reverse();
-                        renderHistory();
-                    }
+                const data = await readContract('get_history', [10]);
+                if (data && Array.isArray(data)) {
+                    history = data.reverse();
+                    renderHistory();
                 }
             } catch (err) {
                 console.error('Fetch history error:', err);
@@ -1928,13 +1603,12 @@
             submitBtn.disabled = false;
             submitBtn.textContent = '🚀 Submit Word';
             document.getElementById('wordInput').disabled = false;
-            document.getElementById('wordInput').value = '';
             
-            // 隐藏游戏区域，用户需要重新点击 Create Room 或 Join
-            document.getElementById('gameArea').classList.add('hidden');
-            document.getElementById('currentRoom').classList.add('hidden');
-            
+            showState('input');
             renderRoom();
+            
+            // 重新启动房间列表轮询
+            startRoomListPolling();
             
             document.getElementById('playersNeeded').textContent = '4';
             document.getElementById('waitingCount').textContent = '4';
