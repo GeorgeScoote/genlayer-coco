@@ -332,10 +332,40 @@
         let history = [];
         let leaderboard = [];
         
-        // 这些函数保留但不再使用localStorage
+        // 保存排行榜到 localStorage（备份）
         function saveLeaderboard() {
-            // 排行榜由链上管理，不需要本地保存
+            try {
+                localStorage.setItem('consensus_leaderboard', JSON.stringify(leaderboard));
+            } catch (e) {
+                console.log('Save leaderboard to localStorage failed:', e);
+            }
         }
+        
+        // 加载本地排行榜（如果链上没有数据）
+        function loadLocalLeaderboard() {
+            try {
+                const saved = localStorage.getItem('consensus_leaderboard');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    if (Array.isArray(data) && data.length > 0) {
+                        // 合并本地数据（不覆盖链上数据）
+                        data.forEach(p => {
+                            const existing = leaderboard.find(l => 
+                                l.fullAddr?.toLowerCase() === p.fullAddr?.toLowerCase() ||
+                                l.addr === p.addr
+                            );
+                            if (!existing) {
+                                leaderboard.push(p);
+                            }
+                        });
+                        leaderboard.sort((a, b) => b.xp - a.xp);
+                    }
+                }
+            } catch (e) {
+                console.log('Load local leaderboard failed:', e);
+            }
+        }
+        
         function saveHistory() {
             // 历史记录仅为当前会话
         }
@@ -368,7 +398,10 @@
         let isSettling = false;
         
         // 页面加载时初始化
-        fetchLeaderboard();
+        fetchLeaderboard().then(() => {
+            loadLocalLeaderboard();
+            renderLeaderboard();
+        });
         fetchHistory();
         
         // Firebase 实时监听房间状态
@@ -440,8 +473,19 @@
                 }
             }
             
+            // 保留现有的AI机器人
+            const existingAIs = game.players.filter(p => p.ai);
+            
             game.players = players;
-            const playerCount = players.length;
+            
+            // 把AI机器人加回来
+            existingAIs.forEach(ai => {
+                if (!game.players.find(p => p.addr === ai.addr)) {
+                    game.players.push(ai);
+                }
+            });
+            
+            const playerCount = game.players.length;
             const needed = Math.max(0, GAME_CONFIG.minPlayers - playerCount);
             const max = GAME_CONFIG.maxPlayers;
             
@@ -895,12 +939,23 @@
                 
                 // 放宽显示条件：只要有地址就构建玩家列表
                 if (roomData && roomData.addresses && roomData.addresses.length > 0) {
+                    // 保留现有的AI机器人
+                    const existingAIs = game.players.filter(p => p.ai);
+                    
                     game.players = roomData.addresses.map((addr, i) => ({
                         addr: addr.slice(0, 6) + '...' + addr.slice(-4),
                         fullAddr: addr,
                         word: roomData.words ? (roomData.words[i] || '') : '',
                         ai: false
                     }));
+                    
+                    // 把AI机器人加回来
+                    existingAIs.forEach(ai => {
+                        if (!game.players.find(p => p.addr === ai.addr)) {
+                            game.players.push(ai);
+                        }
+                    });
+                    
                     console.log('Built players from chain:', game.players.length);
                 } else {
                     // 只有在没有数据时才清空
@@ -1295,6 +1350,9 @@
                 
                 // 构建玩家列表
                 if (roomData && roomData.addresses && roomData.addresses.length > 0) {
+                    // 保留现有的AI机器人
+                    const existingAIs = game.players.filter(p => p.ai);
+                    
                     game.players = [];
                     let meInRoom = false;
                     
@@ -1325,6 +1383,13 @@
                             document.getElementById('liveRoomBadge').textContent = roomData.addresses.length + '/5';
                         }
                     }
+                    
+                    // 把AI机器人加回来
+                    existingAIs.forEach(ai => {
+                        if (!game.players.find(p => p.addr === ai.addr)) {
+                            game.players.push(ai);
+                        }
+                    });
                     
                     renderRoom();
                     updateLivePlayerList();
@@ -1953,8 +2018,8 @@
                     console.log('Firebase clear failed:', e);
                 }
                 
-                // 3️⃣ 从链上刷新排行榜
-                await fetchLeaderboard();
+                // 注意：不要在这里调用 fetchLeaderboard，会覆盖本地数据
+                // 本地数据会在下面的 setTimeout 中更新
                 
             } catch (err) {
                 console.error('Settle error:', err);
