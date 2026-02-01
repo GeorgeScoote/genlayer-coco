@@ -606,6 +606,18 @@
                 game.state = 'submitted';
                 showState('submitted');
                 document.getElementById('submittedWordText').textContent = word;
+                
+                // 添加用户到 game.players
+                const existingIdx = game.players.findIndex(p => p.fullAddr?.toLowerCase() === wallet.address.toLowerCase());
+                if (existingIdx < 0) {
+                    game.players.push({
+                        addr: wallet.short,
+                        word: word,
+                        ai: false,
+                        fullAddr: wallet.address
+                    });
+                }
+                
                 toast('✅ Submitted! TX: ' + (txResult.hash || '').slice(0, 10) + '...', 'bg-green-600');
                 
             } catch (err) {
@@ -1871,13 +1883,24 @@
             
             const usedNames = game.players.filter(p => p.ai).map(p => p.addr);
             const name = AI_NAMES.find(n => !usedNames.includes(n)) || 'Bot-X';
-            const usedWords = game.players.map(p => p.word);
-            const word = AI_WORDS.find(w => !usedWords.includes(w)) || game.theme.keywords[0];
+            
+            // 获取用户的词（如果有）
+            const userPlayer = game.players.find(p => !p.ai);
+            const userWord = userPlayer ? userPlayer.word : null;
+            
+            let word;
+            // 50% 概率匹配用户的词，50% 概率用新词
+            if (userWord && Math.random() < 0.5) {
+                word = userWord;
+            } else {
+                const usedWords = game.players.map(p => p.word);
+                word = AI_WORDS.find(w => !usedWords.includes(w)) || game.theme.keywords[0];
+            }
             
             // AI
             game.players.push({ addr: name, word: word, ai: true });
             renderRoom();
-            toast(' ' + name + ' ', 'bg-orange-500');
+            toast('🤖 ' + name + ' joined with "' + word + '"', 'bg-orange-500');
             checkFull();
         }
 
@@ -1985,18 +2008,19 @@
                 saveHistory();
                 renderHistory();
 
-                // 显示结果（不再更新本地排行榜，因为已从链上读取）
+                // 显示结果（更新本地排行榜用于显示）
                 result.forEach(p => {
                     const existingIdx = leaderboard.findIndex(l => l.addr === p.addr || (l.fullAddr && p.fullAddr && l.fullAddr.toLowerCase() === p.fullAddr.toLowerCase()));
                     if (existingIdx >= 0) {
-                        // 已从链上更新
-                    } else if (p.ai) {
-                        // AI 机器人仅显示，不写入链上
+                        // 更新已存在的玩家XP
+                        leaderboard[existingIdx].xp += p.xp;
+                    } else {
+                        // 添加新玩家（包括真实玩家和AI）
                         leaderboard.push({
                             addr: p.addr,
                             fullAddr: p.fullAddr || p.addr,
                             xp: p.xp,
-                            ai: true
+                            ai: p.ai || false
                         });
                     }
                 });
