@@ -450,7 +450,7 @@
             document.getElementById('waitingCount').textContent = needed > 0 ? needed : 'Ready';
             
             if (playerCount > 0) {
-                const emptySlots = Math.min(3, max - playerCount);
+                const emptySlots = max - playerCount;
                 container.innerHTML = `
                     <div class="p-4 rounded-lg bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/30">
                         <div class="flex items-center justify-between mb-3">
@@ -711,6 +711,103 @@
             }
         }
         
+        // 显示游戏结果
+        function showGameResult() {
+            const players = game.players;
+            if (!players || players.length === 0) return;
+            
+            // 统计词语匹配
+            const wordCount = {};
+            players.forEach(p => {
+                const w = p.word.toLowerCase();
+                if (!wordCount[w]) wordCount[w] = [];
+                wordCount[w].push(p);
+            });
+            
+            // 找出匹配最多的词语（冠军词）
+            let maxCount = 0;
+            let championWord = '';
+            Object.entries(wordCount).forEach(([word, pList]) => {
+                if (pList.length > maxCount) {
+                    maxCount = pList.length;
+                    championWord = word;
+                }
+            });
+            
+            // 计算每个玩家的 XP
+            const result = players.map(p => {
+                const w = p.word.toLowerCase();
+                const matchCount = wordCount[w].length;
+                let xp = 20; // 基础分
+                let win = false;
+                let champion = false;
+                
+                if (matchCount >= 2) {
+                    xp += 50; // 匹配奖励
+                    win = true;
+                }
+                if (w === championWord && maxCount >= 2) {
+                    xp += 100; // 冠军奖励
+                    champion = true;
+                }
+                
+                return {
+                    addr: p.addr,
+                    fullAddr: p.fullAddr,
+                    word: p.word,
+                    xp: xp,
+                    win: win,
+                    champion: champion,
+                    matchCount: matchCount,
+                    ai: p.ai || false
+                };
+            });
+            
+            // 按 XP 排序
+            result.sort((a, b) => b.xp - a.xp);
+            
+            // 找出匹配的词语
+            const matchedWords = Object.entries(wordCount)
+                .filter(([w, pList]) => pList.length >= 2)
+                .map(([w, pList]) => w);
+            
+            // 显示结果
+            const userResult = result.find(r => r.fullAddr && r.fullAddr.toLowerCase() === wallet.address?.toLowerCase());
+            const userWon = userResult && userResult.win;
+            
+            document.getElementById('resultTitle').textContent = userWon ? '🎉 Words Matched!' : '🏁 Game Over!';
+            document.getElementById('resultTheme').textContent = game.theme.name + (matchedWords.length > 0 ? ' | Matched: ' + matchedWords.join(', ') : '');
+            document.getElementById('resultList').innerHTML = result.map(p => {
+                const isMe = p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase();
+                return `
+                <div class="flex items-center justify-between p-3 rounded-lg ${p.champion ? 'bg-yellow-500/10 border border-yellow-500/30' : p.win ? 'bg-green-500/10 border border-green-500/30' : 'bg-white/5'}">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">${p.champion ? '🏆' : p.win ? '✨' : '👤'}</span>
+                        <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
+                        ${p.ai ? '<span class="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
+                        <span class="text-xs text-gray-500">"${p.word}"</span>
+                        ${p.matchCount > 1 ? `<span class="px-1.5 py-0.5 text-xs rounded bg-green-500/20 text-green-400">×${p.matchCount}</span>` : ''}
+                    </div>
+                    <span class="font-bold ${p.champion ? 'text-yellow-400' : p.win ? 'text-green-400' : 'text-gray-400'}">+${p.xp} XP</span>
+                </div>
+            `}).join('');
+            
+            game.state = 'result';
+            showState('result');
+            
+            // 更新房间状态区域
+            document.getElementById('roomListContent').innerHTML = `
+                <div class="p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-center">
+                    <div class="text-3xl mb-2">🏁</div>
+                    <p class="text-green-400 font-bold mb-1">Game Complete!</p>
+                    <p class="text-gray-400 text-sm">Click "Play Again" to start a new game</p>
+                </div>
+            `;
+            
+            toast(userWon ? '🎉 You won!' : '🏁 Game complete!', userWon ? 'bg-yellow-600' : 'bg-green-600');
+            updateHeaderXP();
+        }
+        
         // 手动刷新（现在只刷新排行榜）
         async function manualRefresh() {
             const btn = document.getElementById('refreshBtn');
@@ -819,7 +916,7 @@
                         p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase()
                     );
                     
-                    const emptySlots = Math.min(3, max - playerCount);
+                    const emptySlots = max - playerCount;
                     container.innerHTML = `
                         <div class="p-4 rounded-lg bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/30">
                             <div class="flex items-center justify-between mb-3">
@@ -1799,7 +1896,7 @@
             }
         }
 
-        function settle() {
+        async function settle() {
             // 立即停止所有定时器，防止重复调用
             stopPolling();
             stopCountdown();
@@ -1812,6 +1909,35 @@
             game.state = 'settling';
             showState('settling');
             
+            try {
+                // 1️⃣ 调用链上 settle_game 结算（计算匹配奖励）
+                if (wallet.connected) {
+                    toast('Settling on chain...', 'bg-orange-500');
+                    try {
+                        const txResult = await callContract('settle_game', []);
+                        console.log('Chain settle TX:', txResult);
+                        toast('Chain settled!', 'bg-green-600');
+                    } catch (e) {
+                        console.log('Chain settle failed (may already settled):', e);
+                    }
+                }
+                
+                // 2️⃣ 清空 Firebase 房间
+                try {
+                    await roomRef.remove();
+                    console.log('Firebase room cleared');
+                } catch (e) {
+                    console.log('Firebase clear failed:', e);
+                }
+                
+                // 3️⃣ 从链上刷新排行榜
+                await fetchLeaderboard();
+                
+            } catch (err) {
+                console.error('Settle error:', err);
+            }
+            
+            // 4️⃣ 显示结果（前端计算用于展示）
             setTimeout(() => {
                 // 计算词语相似度得分（简单版本：相同词加分）
                 const wordCounts = {};
@@ -1822,7 +1948,7 @@
                 // 找出匹配的词（出现次数>1）
                 const matchedWords = Object.keys(wordCounts).filter(w => wordCounts[w] > 1);
                 
-                // 计算每个玩家的得分
+                // 计算每个玩家的得分（仅用于显示）
                 const result = game.players.map(p => {
                     const isMatched = matchedWords.includes(p.word);
                     const matchCount = wordCounts[p.word] || 1;
@@ -1859,17 +1985,18 @@
                 saveHistory();
                 renderHistory();
 
-                // 更新排行榜 - 包含玩家和AI
+                // 显示结果（不再更新本地排行榜，因为已从链上读取）
                 result.forEach(p => {
                     const existingIdx = leaderboard.findIndex(l => l.addr === p.addr || (l.fullAddr && p.fullAddr && l.fullAddr.toLowerCase() === p.fullAddr.toLowerCase()));
                     if (existingIdx >= 0) {
-                        leaderboard[existingIdx].xp += p.xp;
-                    } else {
+                        // 已从链上更新
+                    } else if (p.ai) {
+                        // AI 机器人仅显示，不写入链上
                         leaderboard.push({
                             addr: p.addr,
                             fullAddr: p.fullAddr || p.addr,
                             xp: p.xp,
-                            ai: p.ai || false
+                            ai: true
                         });
                     }
                 });
@@ -1954,13 +2081,10 @@
                 return `<span class="px-3 py-1.5 rounded-full border text-xs ${cls}">${p.ai ? '🤖 ' : ''}${isMe ? 'You' : p.addr}: <span class="text-orange-400">${p.word}</span></span>`;
             }).join('');
 
-            // 只显示几个空位
-            const emptySlots = Math.min(3, max - n);
+            // 显示全部空位
+            const emptySlots = max - n;
             for (let i = 0; i < emptySlots; i++) {
                 html += '<span class="px-3 py-1.5 rounded-full border border-dashed border-[#1a1a1a] text-xs text-gray-500">Empty</span>';
-            }
-            if (max - n > 3) {
-                html += `<span class="px-3 py-1.5 text-xs text-gray-500">+${max - n - 3} more</span>`;
             }
             document.getElementById('playerSlots').innerHTML = html;
         }
