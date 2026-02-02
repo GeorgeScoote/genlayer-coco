@@ -260,7 +260,7 @@
     <script>
         // ========== CONTRACT CONFIG ==========
         const CONTRACT = {
-            address: '0x1DeAfc00b6d3CF9e48e2433311a77F58a5d235A6',
+            address: '0xAe19AE10a8BeB861d8B954640d292e4aD3Db7320',
             rpcUrl: 'https://studio.genlayer.com/api',
             chainId: 61999
         };
@@ -341,28 +341,22 @@
             }
         }
         
-        // 加载本地排行榜（如果链上没有数据）
+        // 加载本地排行榜
         function loadLocalLeaderboard() {
             try {
                 const saved = localStorage.getItem('consensus_leaderboard');
+                console.log('Loading from localStorage:', saved);
                 if (saved) {
                     const data = JSON.parse(saved);
                     if (Array.isArray(data) && data.length > 0) {
-                        // 合并本地数据（不覆盖链上数据）
-                        data.forEach(p => {
-                            const existing = leaderboard.find(l => 
-                                l.fullAddr?.toLowerCase() === p.fullAddr?.toLowerCase() ||
-                                l.addr === p.addr
-                            );
-                            if (!existing) {
-                                leaderboard.push(p);
-                            }
-                        });
+                        // 直接使用本地数据
+                        leaderboard = data;
                         leaderboard.sort((a, b) => b.xp - a.xp);
+                        console.log('Loaded leaderboard:', leaderboard.length, 'players');
                     }
                 }
             } catch (e) {
-                console.log('Load local leaderboard failed:', e);
+                console.error('Load local leaderboard failed:', e);
             }
         }
         
