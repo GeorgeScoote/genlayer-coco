@@ -260,7 +260,7 @@
     <script>
         // ========== CONTRACT CONFIG ==========
         const CONTRACT = {
-            address: '0xAe19AE10a8BeB861d8B954640d292e4aD3Db7320',
+            address: '0xD02d3FD7d77032434DaEdCCC39c4e5D95a2430c4',
             rpcUrl: 'https://studio.genlayer.com/api',
             chainId: 61999
         };
@@ -620,7 +620,7 @@
             try {
                 // 1️⃣ 先调用合约写入链上
                 toast('Writing to blockchain...', 'bg-orange-500');
-                const txResult = await callContract('submit_word', [word]);
+                const txResult = await callContract('submit_word', [wallet.address, word]);
                 
                 if (!txResult.success) {
                     throw new Error(txResult.error || 'Contract call failed');
@@ -1519,9 +1519,14 @@
         //  -  MetaMask 
         async function callContract(method, args) {
             try {
-                // 使用 GenLayer 自定义编码格式 (write方法)
-                // args[0] 是 word 参数
-                const argsObj = args && args.length > 0 ? { word: args[0] } : {};
+                // 构建参数对象
+                let argsObj = {};
+                if (method === 'submit_word' && args.length >= 2) {
+                    argsObj = { player: args[0], word: args[1] };
+                } else if (args && args.length > 0) {
+                    argsObj = { word: args[0] };
+                }
+                
                 const hexData = encodeGenLayerCall(method, argsObj, true);
 
                 console.log('Sending TX to GenLayer:', { method, args, hexData });
@@ -1564,26 +1569,18 @@
         
         // GenLayer calldata 编码函数
         function encodeGenLayerCall(methodName, args = {}, isWrite = false) {
-            let header, body;
+            // 使用 msgpack 编码
+            const callData = {
+                method: methodName
+            };
             
-            if (!isWrite || Object.keys(args).length === 0) {
-                // Read方法 (无参数): da 98 <method_len-1> 06 + "method|<method_name>\0"
-                header = new Uint8Array([0xda, 0x98, methodName.length - 1, 6]);
-                body = `method|${methodName}\x00`;
-            } else {
-                // Write方法 (有参数): e1 9f <method_len + arg_len + 7> 04 + "args\r$<value>\x06method\<method_name>\0"
-                const argValue = Object.values(args)[0] || '';
-                const lenByte = methodName.length + argValue.length + 7;
-                header = new Uint8Array([0xe1, 0x9f, lenByte, 4]);
-                body = `args\r$${argValue}\x06method\\${methodName}\x00`;
+            if (Object.keys(args).length > 0) {
+                callData.args = args;
             }
             
-            const bodyBytes = new TextEncoder().encode(body);
-            const full = new Uint8Array(header.length + bodyBytes.length);
-            full.set(header, 0);
-            full.set(bodyBytes, header.length);
-            
-            return bytesToHex(full);
+            console.log('Encoding call:', callData);
+            const encoded = msgpack.encode(callData);
+            return bytesToHex(encoded);
         }
 
         // 读取合约 - 使用 GenLayer gen_call API
