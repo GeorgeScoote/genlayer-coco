@@ -301,26 +301,36 @@
         async function refreshRoomList() {
             // 如果正在结算或已结算，跳过刷新
             if (isSettling || game.state === 'settling' || game.state === 'result') return;
-            
-            // 从链上读取房间状态
+
+            // 从链上读取房间状态 —— 合约现在返回
+            // {"players":N,"addresses":["0x..."],"words":["bitcoin",...]}
             const status = await readContract('get', []);
             console.log('Chain room status:', status);
-            
+
             const container = document.getElementById('roomListContent');
-            
-            // 合约返回 "word1,word2,word3" 格式
+
+            let chainAddrs = [];
             let chainWords = [];
-            if (status && typeof status === 'string' && status.trim() !== '') {
-                chainWords = status.split(',').map(w => w.trim()).filter(w => w);
+            if (status && typeof status === 'object') {
+                chainAddrs = Array.isArray(status.addresses) ? status.addresses : [];
+                chainWords = Array.isArray(status.words)     ? status.words     : [];
             }
-            
-            // 如果用户已提交词语，不覆盖game.players
+
+            // 如果用户已提交词语，不覆盖 game.players
             if (game.state !== 'submitted' && game.state !== 'settling') {
-                game.players = chainWords.map((w, i) => ({
-                    addr: 'Player ' + (i+1),
-                    word: w,
-                    ai: false
-                }));
+                game.players = chainWords.map((w, i) => {
+                    const addr = chainAddrs[i] || '';
+                    const isMe = wallet.connected &&
+                                 addr.toLowerCase() === wallet.address.toLowerCase();
+                    return {
+                        addr:     isMe ? wallet.short
+                                       : (addr ? addr.slice(0,6) + '...' + addr.slice(-4)
+                                               : 'Player ' + (i+1)),
+                        fullAddr: addr,
+                        word:     w,
+                        ai:       false,
+                    };
+                });
             }
             
             // 计算当前玩家数和需要的人数
@@ -698,10 +708,14 @@
             toast('Sending to chain...', 'bg-orange-500');
 
             try {
-                // 发送到链上
+                // 发送到链上 (调用合约 add(word))
                 const txResult = await callContract('add', [w]);
-                
+
                 if (txResult.success && txResult.hash) {
+                    // 等待交易确认，再去读链上状态，否则会拿到旧的 current_room
+                    try { await waitForConfirmation(txResult.hash, 45000); }
+                    catch (e) { console.warn('confirmation wait failed:', e); }
+
                     game.word = w;
                     
                     // 添加自己到玩家列表
@@ -732,9 +746,11 @@
                     startCountdown();
                     startAITimeout();
                     
-                    // 刷新房间列表
-                    setTimeout(() => refreshRoomList(), 2000);
+                    // 立即刷新一次链上房间列表（交易已确认）
+                    await refreshRoomList();
                     renderRoom();
+                    // 启动 3 秒一次的轮询
+                    startPolling();
                     
                     game.txPending = false;
                     return;
