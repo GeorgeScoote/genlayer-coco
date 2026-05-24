@@ -301,26 +301,36 @@
         async function refreshRoomList() {
             // 如果正在结算或已结算，跳过刷新
             if (isSettling || game.state === 'settling' || game.state === 'result') return;
-            
-            // 从链上读取房间状态
+
+            // 从链上读取房间状态 —— 合约现在返回
+            // {"players":N,"addresses":["0x..."],"words":["bitcoin",...]}
             const status = await readContract('get', []);
             console.log('Chain room status:', status);
-            
+
             const container = document.getElementById('roomListContent');
-            
-            // 合约返回 "word1,word2,word3" 格式
+
+            let chainAddrs = [];
             let chainWords = [];
-            if (status && typeof status === 'string' && status.trim() !== '') {
-                chainWords = status.split(',').map(w => w.trim()).filter(w => w);
+            if (status && typeof status === 'object') {
+                chainAddrs = Array.isArray(status.addresses) ? status.addresses : [];
+                chainWords = Array.isArray(status.words)     ? status.words     : [];
             }
-            
-            // 如果用户已提交词语，不覆盖game.players
+
+            // 如果用户已提交词语，不覆盖 game.players
             if (game.state !== 'submitted' && game.state !== 'settling') {
-                game.players = chainWords.map((w, i) => ({
-                    addr: 'Player ' + (i+1),
-                    word: w,
-                    ai: false
-                }));
+                game.players = chainWords.map((w, i) => {
+                    const addr = chainAddrs[i] || '';
+                    const isMe = wallet.connected &&
+                                 addr.toLowerCase() === wallet.address.toLowerCase();
+                    return {
+                        addr:     isMe ? wallet.short
+                                       : (addr ? addr.slice(0,6) + '...' + addr.slice(-4)
+                                               : 'Player ' + (i+1)),
+                        fullAddr: addr,
+                        word:     w,
+                        ai:       false,
+                    };
+                });
             }
             
             // 计算当前玩家数和需要的人数
@@ -698,10 +708,14 @@
             toast('Sending to chain...', 'bg-orange-500');
 
             try {
-                // 发送到链上
+                // 发送到链上 (调用合约 add(word))
                 const txResult = await callContract('add', [w]);
-                
+
                 if (txResult.success && txResult.hash) {
+                    // 等待交易确认，再去读链上状态，否则会拿到旧的 current_room
+                    try { await waitForConfirmation(txResult.hash, 45000); }
+                    catch (e) { console.warn('confirmation wait failed:', e); }
+
                     game.word = w;
                     
                     // 添加自己到玩家列表
@@ -732,9 +746,11 @@
                     startCountdown();
                     startAITimeout();
                     
-                    // 刷新房间列表
-                    setTimeout(() => refreshRoomList(), 2000);
+                    // 立即刷新一次链上房间列表（交易已确认）
+                    await refreshRoomList();
                     renderRoom();
+                    // 启动 3 秒一次的轮询
+                    startPolling();
                     
                     game.txPending = false;
                     return;
@@ -975,29 +991,30 @@
                         document.getElementById('playersNeeded').textContent = currentNeeded;
                         document.getElementById('waitingCount').textContent = currentNeeded;
                         
-                        // 0
-                        if (chainCount === 0 && game.state === 'submitted') {
-                            console.log(' !');
+                        // Room cleared = contract auto-settled (5th player's TX triggered it)
+                        if (chainCount === 0 && game.state === 'submitted' && !isSettling) {
+                            console.log('Room cleared — auto-settle detected');
                             stopPolling();
                             stopCountdown();
                             stopAITimeout();
-                            
-                            await fetchLeaderboard();
-                            await fetchHistory();
-                            
-                            toast(' ', 'bg-green-600');
-                            switchPage('leaderboard');
-                            startNewRound();
+                            isSettling = true;
+                            game.state = 'settling';
+                            showState('settling');
+                            toast('Game settled! Loading results...', 'bg-green-600');
+                            setTimeout(() => showSettleResults(), 1500);
                         }
-                        
-                        // 5
-                        if (chainCount >= 5 && game.state === 'submitted') {
-                            console.log(' AI...');
+
+                        // 5 players on chain — auto-settle will fire on the 5th TX;
+                        // poll until the room clears, then show results.
+                        if (chainCount >= 5 && game.state === 'submitted' && !isSettling) {
+                            console.log('5 players on chain — waiting for auto-settle...');
+                            isSettling = true;
                             stopPolling();
                             stopCountdown();
                             stopAITimeout();
                             showState('settling');
-                            toast(' 5AI...', 'bg-orange-500');
+                            toast('5 players! AI judging on-chain...', 'bg-orange-500');
+                            waitForSettle();
                         }
                     }
                 } catch (err) {
@@ -1112,8 +1129,100 @@
             }
         }
 
-        function settle() {
-            // 立即停止所有定时器，防止重复调用
+        // ─── Settle helpers ──────────────────────────────────────────────────
+
+        /** Render the result screen from the latest on-chain history entry. */
+        async function showSettleResults() {
+            await fetchLeaderboard();
+            await fetchHistory();
+
+            const hist = await readContract('get_history', [1]);
+            const latest = Array.isArray(hist) && hist.length > 0 ? hist[hist.length - 1] : null;
+
+            if (latest) {
+                const winners      = latest.winners       || [];
+                const winningWords = latest.winning_words || [];
+                const room         = latest.room          || {};
+
+                const userWon = wallet.address &&
+                    winners.some(a => a.toLowerCase() === wallet.address.toLowerCase());
+
+                document.getElementById('resultTitle').textContent =
+                    userWon ? '🎉 You Won!' : '🏁 Game Over!';
+                document.getElementById('resultTheme').textContent =
+                    winningWords.length ? winningWords.join(', ') : 'No match this round';
+
+                document.getElementById('resultList').innerHTML =
+                    Object.entries(room).map(([addr, word]) => {
+                        const isMe = wallet.address &&
+                            addr.toLowerCase() === wallet.address.toLowerCase();
+                        const win  = winners.some(a => a.toLowerCase() === addr.toLowerCase());
+                        const xp   = win ? 60 : 10;
+                        const display = isMe ? 'You' : (addr.slice(0,6) + '...' + addr.slice(-4));
+                        return `
+                        <div class="flex items-center justify-between p-3 rounded-lg
+                                    ${win ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-white/5'}">
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg">${win ? '🏆' : '👤'}</span>
+                                <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${display}</span>
+                                <span class="text-xs text-gray-500">"${word}"</span>
+                            </div>
+                            <span class="font-bold ${win ? 'text-yellow-400' : 'text-gray-400'}">
+                                ${win ? '🥇 ' : ''}+${xp} XP
+                            </span>
+                        </div>`;
+                    }).join('');
+
+                toast(userWon ? '🎉 You won! +60 XP' : '🏁 Game complete +10 XP',
+                      userWon ? 'bg-yellow-600' : 'bg-green-600');
+            } else {
+                document.getElementById('resultTitle').textContent = '🏁 Game Complete!';
+                document.getElementById('resultTheme').textContent  = '-';
+                document.getElementById('resultList').innerHTML =
+                    '<p class="text-gray-400 text-center py-4">Check the History tab for results.</p>';
+                toast('Game settled — see History tab', 'bg-green-600');
+            }
+
+            document.getElementById('roomListContent').innerHTML = `
+                <div class="p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-center">
+                    <div class="text-3xl mb-2">🏁</div>
+                    <p class="text-green-400 font-bold mb-1">Game Complete!</p>
+                    <p class="text-gray-400 text-sm">Click "Play Again" to start a new game</p>
+                </div>`;
+
+            isSettling = false;
+            game.state = 'result';
+            showState('result');
+            updateHeaderXP();
+        }
+
+        /**
+         * Poll the chain until current_room is empty (consensus settled),
+         * then display results.  Used when auto-settle fired (5 players on chain).
+         */
+        async function waitForSettle() {
+            const maxMs  = 120_000;
+            const start  = Date.now();
+            while (Date.now() - start < maxMs) {
+                await new Promise(r => setTimeout(r, 3000));
+                try {
+                    const status = await readContract('get', []);
+                    if (status && status.players === 0) {
+                        await showSettleResults();
+                        return;
+                    }
+                } catch (e) { console.warn('waitForSettle poll:', e); }
+            }
+            toast('Settlement is taking long — check History tab', 'bg-yellow-600');
+            isSettling = false;
+            startNewRound();
+        }
+
+        /**
+         * Settle the current room by calling settle_game on-chain.
+         * Used when the 60-second AI-fill timeout fires.
+         */
+        async function settle() {
             stopPolling();
             stopCountdown();
             stopAITimeout();
@@ -1121,80 +1230,35 @@
                 clearInterval(globalPollingInterval);
                 globalPollingInterval = null;
             }
-            
+
             game.state = 'settling';
             showState('settling');
-            
-            setTimeout(() => {
-                const shuffled = [...game.players].sort(() => Math.random() - 0.5);
-                const winners = shuffled.slice(0, Math.random() > 0.5 ? 2 : 1);
-                const result = game.players.map(p => ({
-                    ...p,
-                    win: winners.some(w => w.addr === p.addr),
-                    xp: winners.some(w => w.addr === p.addr) ? 50 : 10
-                }));
+            toast('Calling settle_game on chain...', 'bg-orange-500');
 
-                history.unshift({
-                    id: history.length + 1,
-                    theme: 'blockchain',
-                    winners: winners.map(w => w.addr),
-                    words: game.players.map(p => p.word)
-                });
-                saveHistory();
-                renderHistory();
+            try {
+                const txResult = await callContract('settle_game', []);
+                if (txResult.success && txResult.hash) {
+                    try { await waitForConfirmation(txResult.hash, 90_000); }
+                    catch (e) { console.warn('settle confirmation:', e); }
+                } else if (!txResult.success) {
+                    throw new Error(txResult.error || 'settle_game TX failed');
+                }
 
-                // 更新排行榜 - 包含玩家和AI
-                result.forEach(p => {
-                    const existingIdx = leaderboard.findIndex(l => l.addr === p.addr || (l.fullAddr && p.fullAddr && l.fullAddr.toLowerCase() === p.fullAddr.toLowerCase()));
-                    if (existingIdx >= 0) {
-                        leaderboard[existingIdx].xp += p.xp;
-                    } else {
-                        leaderboard.push({
-                            addr: p.addr,
-                            fullAddr: p.fullAddr || p.addr,
-                            xp: p.xp,
-                            ai: p.ai || false
-                        });
-                    }
-                });
-                
-                // 排序并保存
-                leaderboard.sort((a, b) => b.xp - a.xp);
-                saveLeaderboard();
-                renderLeaderboard();
+                // Give the node a moment to propagate state
+                await new Promise(r => setTimeout(r, 2000));
+                await showSettleResults();
 
-                const userWon = winners.some(w => w.addr === wallet.short || (w.fullAddr && w.fullAddr.toLowerCase() === wallet.address?.toLowerCase()));
-                document.getElementById('resultTitle').textContent = userWon ? '🎉 You Won!' : '🏁 Game Over!';
-                document.getElementById('resultTheme').textContent = 'blockchain technology';
-                document.getElementById('resultList').innerHTML = result.map(p => {
-                    const isMe = p.addr === wallet.short || (p.fullAddr && p.fullAddr.toLowerCase() === wallet.address?.toLowerCase());
-                    return `
-                    <div class="flex items-center justify-between p-3 rounded-lg ${p.win ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-white/5'}">
-                        <div class="flex items-center gap-2">
-                            <span class="text-lg">${p.win ? '🏆' : '👤'}</span>
-                            <span class="${isMe ? 'text-orange-400 font-bold' : 'text-gray-300'}">${isMe ? 'You' : p.addr}</span>
-                            ${p.ai ? '<span class="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">AI</span>' : ''}
-                            <span class="text-xs text-gray-500">"${p.word}"</span>
-                        </div>
-                        <span class="font-bold ${p.win ? 'text-yellow-400' : 'text-gray-400'}">${p.win ? '🥇 ' : ''}+${p.xp} XP</span>
-                    </div>
-                `}).join('');
-
-                game.state = 'result';
-                showState('result');
-                
-                // 更新房间状态区域显示游戏结束
-                document.getElementById('roomListContent').innerHTML = `
-                    <div class="p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-center">
-                        <div class="text-3xl mb-2">🏁</div>
-                        <p class="text-green-400 font-bold mb-1">Game Complete!</p>
-                        <p class="text-gray-400 text-sm">Click "Play Again" to start a new game</p>
-                    </div>
-                `;
-                
-                toast(userWon ? '🎉 You won +50 XP!' : '🏁 Game complete +10 XP', userWon ? 'bg-yellow-600' : 'bg-green-600');
-                updateHeaderXP();
-            }, 3000);
+            } catch (err) {
+                console.error('Settle error:', err);
+                const cancelled = err.code === 4001 ||
+                    err.message?.includes('denied') || err.message?.includes('cancel');
+                toast(cancelled ? 'Settle cancelled' : 'Settle error: ' + err.message,
+                      cancelled ? 'bg-gray-600' : 'bg-red-600');
+                isSettling = false;
+                game.state = game.word ? 'submitted' : 'input';
+                showState(game.state);
+                startRoomListPolling();
+            }
         }
 
         function startNewRound() {
@@ -1293,16 +1357,48 @@
         }
 
         function renderHistory() {
-            document.getElementById('historyList').innerHTML = history.map(g => `
-                <div class="bg-[#111111] rounded-xl p-5">
-                    <div class="flex justify-between mb-3">
-                        <span class="font-bold">Game Game #${g.id}</span>
-                        <span class="text-xs text-yellow-400">Rank ${g.winners.join(', ')}</span>
+            if (!history || history.length === 0) {
+                document.getElementById('historyList').innerHTML = `
+                    <div class="text-center p-8 text-gray-500">
+                        <div class="text-4xl mb-3">📜</div>
+                        <p>No games yet</p>
+                        <p class="text-xs mt-1">Play a round to see history here!</p>
+                    </div>`;
+                return;
+            }
+
+            document.getElementById('historyList').innerHTML = history.map((g, i) => {
+                // Support both chain format {room, winners, winning_words}
+                // and the legacy localStorage format {id, theme, winners, words}
+                const words        = g.room ? Object.values(g.room) : (g.words || []);
+                const winners      = g.winners      || [];
+                const winningWords = g.winning_words || (g.theme ? [g.theme] : []);
+                const roundNum     = history.length - i;
+
+                const winnerList = winners.length
+                    ? winners.slice(0, 3).map(a =>
+                        typeof a === 'string' && a.startsWith('0x')
+                            ? a.slice(0,6) + '...' + a.slice(-4)
+                            : a
+                      ).join(', ')
+                    : 'No match';
+
+                return `
+                <div class="bg-white/5 rounded-xl p-5">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="font-bold text-white">Round #${roundNum}</span>
+                        <span class="text-xs text-yellow-400">🏆 ${winnerList}</span>
                     </div>
-                    <div class="text-xs text-gray-400 mb-3">Theme: <span class="text-orange-300">${g.theme}</span></div>
-                    <div class="flex flex-wrap gap-2">${g.words.map(w => `<span class="px-2 py-1 rounded bg-[#151515] text-xs">${w}</span>`).join('')}</div>
-                </div>
-            `).join('');
+                    ${winningWords.length
+                        ? `<div class="text-xs text-gray-400 mb-3">
+                               Matched: <span class="text-orange-300">${winningWords.join(', ')}</span>
+                           </div>`
+                        : ''}
+                    <div class="flex flex-wrap gap-2">
+                        ${words.map(w => `<span class="px-2 py-1 rounded bg-black/30 text-xs">${w}</span>`).join('')}
+                    </div>
+                </div>`;
+            }).join('');
         }
 
         // ========== TOAST ==========
