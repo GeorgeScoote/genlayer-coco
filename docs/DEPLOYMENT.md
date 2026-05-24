@@ -66,7 +66,7 @@ npm run dev
 
 | Parameter | Value |
 |-----------|-------|
-| Chain ID | 61999 (0xF21F) |
+| Chain ID | 61983 (0xF21F) |
 | RPC URL | https://studio.genlayer.com/api |
 | Currency | GEN |
 | Explorer | https://studio.genlayer.com |
@@ -78,6 +78,6 @@ Network will be auto-added when user connects. Manual config:
 ```
 Network Name: GenLayer Testnet
 RPC URL: https://studio.genlayer.com/api
-Chain ID: 61999
+Chain ID: 61983
 Currency: GEN
 ```
